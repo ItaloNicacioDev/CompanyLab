@@ -1,0 +1,38 @@
+{
+  "company": {
+    "name": "My Company",
+    "maxAgents": 100,
+    "defaultRuntime": "OpenCode"
+  },
+  "runtimes": {
+    "OpenCode": {
+      "cli": "opencode",
+      "adapter": "OpenCodeAdapter",
+      "installUrl": "https://github.com/opencode-ai/opencode"
+    },
+    "Codex": {
+      "cli": "codex",
+      "adapter": "CodexAdapter",
+      "installUrl": "https://github.com/openai/codex"
+    },
+    "Claude Code": {
+      "cli": "claude",
+      "adapter": "ClaudeCodeAdapter",
+      "installUrl": "https://github.com/anthropics/anthropic-cookbook"
+    }
+  },
+  "3d": {
+    "enabled": true,
+    "renderDistance": 100,
+    "avatarScale": 1.0,
+    "roomScale": 1.0
+  },
+  "security": {
+    "requireApprovalFor": [
+      "shell_execution",
+      "file_deletion",
+      "internet_access",
+      "api_calls"
+    ]
+  }
+}
