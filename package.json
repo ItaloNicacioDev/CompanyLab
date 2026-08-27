@@ -1,0 +1,35 @@
+{
+  "name": "ai-team-3d",
+  "version": "0.1.0",
+  "description": "Sala de equipe de agentes de IA em 3D, com backend real via OpenCode CLI (opencode serve).",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "cross-env DEV=1 electron .",
+    "build:win": "electron-builder --win",
+    "test:router": "node test/router.test.js"
+  },
+  "build": {
+    "appId": "com.suaempresa.aiteam3d",
+    "productName": "AI Team 3D",
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "config/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.18.0",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "cross-env": "^7.0.3"
+  }
+}
