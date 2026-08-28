@@ -18,6 +18,11 @@
     },
     "files": [
       "src/**/*",
+      "core/**/*",
+      "agents/**/*",
+      "backend/**/*",
+      "room/**/*",
+      "team/**/*",
       "assets/**/*",
       "database/**/*",
       "config/**/*",
