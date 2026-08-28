@@ -1,70 +1,98 @@
 /**
- * desk.js
+ * lab-bench.js
  *
- * Peça reutilizável: mesa de escritório. Usada por vários templates de
- * sala (development, marketing, finance...) — não pertence a nenhum
- * departamento específico.
- *
- * Convenção seguida por TODO prop deste diretório:
- *   - Exporta uma função `createX(options) -> THREE.Group`.
- *   - O Group tem `userData.propType` (identifica o que é, útil ao
- *     clicar num objeto na cena) e `userData.footprint` (largura x
- *     profundidade em unidades de mundo, pra RoomFactory/generic.js
- *     conseguirem posicionar props sem se sobrepor, sem precisar
- *     calcular bounding box toda vez).
- *   - A peça é modelada com a base em y = 0 (encosta no chão), pra
- *     quem for posicionar só precisar setar x/z.
+ * Peça reutilizável: bancada de laboratório com equipamento (béqueres).
+ * Usada em salas de Research / R&D (seção 22 do spec).
  */
 
 const THREE = require("three");
 
 /**
  * @param {object} [options]
- * @param {number} [options.legColor=0x3a3a3a] - cor das pernas/estrutura
- * @param {number} [options.topColor=0x8a5a35] - cor do tampo
+ * @param {number} [options.benchColor=0xd9d9d9] - cor do tampo (granito claro)
+ * @param {number} [options.baseColor=0x2f2f2f]
+ * @param {number} [options.liquidColor=0x22c55e] - cor do líquido nos béqueres
  * @returns {THREE.Group}
  */
-function createDesk({ legColor = 0x3a3a3a, topColor = 0x8a5a35 } = {}) {
-  const desk = new THREE.Group();
-  desk.name = "prop:desk";
+function createLabBench({ benchColor = 0xd9d9d9, baseColor = 0x2f2f2f, liquidColor = 0x22c55e } = {}) {
+  const bench = new THREE.Group();
+  bench.name = "prop:labBench";
 
-  const DESK_WIDTH = 1.4;
-  const DESK_DEPTH = 0.7;
-  const DESK_HEIGHT = 0.75;
+  const BENCH_WIDTH = 1.6;
+  const BENCH_DEPTH = 0.6;
+  const BENCH_HEIGHT = 0.85;
 
-  // Tampo
-  const top = new THREE.Mesh(
-    new THREE.BoxGeometry(DESK_WIDTH, 0.06, DESK_DEPTH),
-    new THREE.MeshStandardMaterial({ color: topColor, roughness: 0.6 })
+  // Base/armário
+  const base = new THREE.Mesh(
+    new THREE.BoxGeometry(BENCH_WIDTH, BENCH_HEIGHT - 0.05, BENCH_DEPTH),
+    new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.7 })
   );
-  top.position.y = DESK_HEIGHT;
+  base.position.y = (BENCH_HEIGHT - 0.05) / 2;
+  base.castShadow = true;
+  base.receiveShadow = true;
+  bench.add(base);
+
+  // Tampo (granito)
+  const top = new THREE.Mesh(
+    new THREE.BoxGeometry(BENCH_WIDTH + 0.05, 0.05, BENCH_DEPTH + 0.05),
+    new THREE.MeshStandardMaterial({ color: benchColor, roughness: 0.3 })
+  );
+  top.position.y = BENCH_HEIGHT - 0.025;
   top.castShadow = true;
   top.receiveShadow = true;
-  desk.add(top);
+  bench.add(top);
 
-  // 4 pernas
-  const legGeo = new THREE.BoxGeometry(0.06, DESK_HEIGHT, 0.06);
-  const legMat = new THREE.MeshStandardMaterial({ color: legColor, roughness: 0.7 });
-  const legOffsets = [
-    [-DESK_WIDTH / 2 + 0.08, DESK_HEIGHT / 2, -DESK_DEPTH / 2 + 0.08],
-    [DESK_WIDTH / 2 - 0.08, DESK_HEIGHT / 2, -DESK_DEPTH / 2 + 0.08],
-    [-DESK_WIDTH / 2 + 0.08, DESK_HEIGHT / 2, DESK_DEPTH / 2 - 0.08],
-    [DESK_WIDTH / 2 - 0.08, DESK_HEIGHT / 2, DESK_DEPTH / 2 - 0.08],
+  // Béqueres com "líquido" (2 unidades, tamanhos variados)
+  const beakerSpecs = [
+    { x: -0.35, radius: 0.05, height: 0.12 },
+    { x: -0.15, radius: 0.035, height: 0.09 },
   ];
-  legOffsets.forEach(([x, y, z]) => {
-    const leg = new THREE.Mesh(legGeo, legMat);
-    leg.position.set(x, y, z);
-    leg.castShadow = true;
-    desk.add(leg);
+
+  beakerSpecs.forEach(({ x, radius, height }) => {
+    const glass = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius, radius * 0.85, height, 12, 1, true),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.25,
+        roughness: 0.1,
+        side: THREE.DoubleSide,
+      })
+    );
+    glass.position.set(x, BENCH_HEIGHT + height / 2, 0);
+    bench.add(glass);
+
+    const liquid = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius * 0.9, radius * 0.8, height * 0.5, 12),
+      new THREE.MeshStandardMaterial({ color: liquidColor, roughness: 0.4 })
+    );
+    liquid.position.set(x, BENCH_HEIGHT + height * 0.25, 0);
+    bench.add(liquid);
   });
 
-  desk.userData = {
-    propType: "desk",
-    footprint: { width: DESK_WIDTH, depth: DESK_DEPTH },
-    surfaceHeight: DESK_HEIGHT, // altura útil pra encaixar monitor/plant em cima
+  // Microscópio simplificado
+  const microscopeBase = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.06, 0.07, 0.02, 12),
+    new THREE.MeshStandardMaterial({ color: 0x2a2a2a })
+  );
+  microscopeBase.position.set(0.25, BENCH_HEIGHT + 0.01, 0);
+  bench.add(microscopeBase);
+
+  const microscopeArm = new THREE.Mesh(
+    new THREE.BoxGeometry(0.02, 0.16, 0.02),
+    new THREE.MeshStandardMaterial({ color: 0x3a3a3a })
+  );
+  microscopeArm.position.set(0.22, BENCH_HEIGHT + 0.09, 0);
+  microscopeArm.rotation.z = 0.15;
+  bench.add(microscopeArm);
+
+  bench.userData = {
+    propType: "labBench",
+    footprint: { width: BENCH_WIDTH + 0.05, depth: BENCH_DEPTH + 0.05 },
+    surfaceHeight: BENCH_HEIGHT,
   };
 
-  return desk;
+  return bench;
 }
 
-module.exports = { createDesk };
+module.exports = { createLabBench };
