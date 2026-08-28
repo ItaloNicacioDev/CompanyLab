@@ -4,21 +4,56 @@
     "maxAgents": 100,
     "defaultRuntime": "OpenCode"
   },
+  "database": {
+    "filename": "companylab.db",
+    "migrationsDir": "database/migrations"
+  },
   "runtimes": {
     "OpenCode": {
+      "type": "cli",
       "cli": "opencode",
       "adapter": "OpenCodeAdapter",
       "installUrl": "https://github.com/opencode-ai/opencode"
     },
     "Codex": {
+      "type": "cli",
       "cli": "codex",
       "adapter": "CodexAdapter",
       "installUrl": "https://github.com/openai/codex"
     },
     "Claude Code": {
+      "type": "cli",
       "cli": "claude",
       "adapter": "ClaudeCodeAdapter",
       "installUrl": "https://github.com/anthropics/anthropic-cookbook"
+    },
+    "Local (Ollama)": {
+      "type": "local",
+      "preset": "ollama",
+      "adapter": "LocalOpenAICompatibleAdapter",
+      "baseUrl": "http://localhost:11434",
+      "requiresModel": true
+    },
+    "Local (LM Studio)": {
+      "type": "local",
+      "preset": "lmstudio",
+      "adapter": "LocalOpenAICompatibleAdapter",
+      "baseUrl": "http://localhost:1234",
+      "requiresModel": true
+    },
+    "Local (llama.cpp)": {
+      "type": "local",
+      "preset": "llamacpp",
+      "adapter": "LocalOpenAICompatibleAdapter",
+      "baseUrl": "http://localhost:8080",
+      "requiresModel": true
+    },
+    "Local (Custom)": {
+      "type": "local",
+      "preset": "custom",
+      "adapter": "LocalOpenAICompatibleAdapter",
+      "baseUrl": null,
+      "requiresModel": true
     }
   },
   "3d": {
