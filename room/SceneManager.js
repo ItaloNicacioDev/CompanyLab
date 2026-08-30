@@ -8,19 +8,24 @@
  *  - Ciclo de vida da cena Three.js (câmera, luzes, renderer, loop de animação)
  *  - Posicionar a sala de cada departamento (via RoomFactory) lado a lado
  *  - Posicionar/mover o avatar de cada agente na estação certa (via AgentAvatar)
+ *  - Dois modos de câmera: 'overview' (visão geral, de cima) e 'walk'
+ *    (passeio livre em primeira pessoa, via CameraController) — alterna
+ *    com a tecla V. Andar pra dentro de uma sala dispara onRoomEntered
+ *    com a lista de agentes de lá, sem precisar de nenhum botão "entrar".
  *  - Clique num avatar -> callback com os dados do agente
  *  - Receber eventos reais da empresa (repassados do main process via IPC)
  *    e refletir no 3D — NUNCA gerar atividade sozinho (seção 26/38).
  *
  * IMPORTANTE: este arquivo não importa o EventBus do main process
- * diretamente (são processos Node separados, ver nota da entrega
- * anterior). Quem alimenta o SceneManager é o `renderer.js`, chamando
- * `sceneManager.handleCompanyEvent(event)` dentro do listener
- * `ipcRenderer.on('event', ...)` que já existe no protótipo atual.
+ * diretamente (são processos Node separados). Quem alimenta o
+ * SceneManager é o `renderer.js`, chamando
+ * `sceneManager.handleCompanyEvent(event)` dentro do listener de
+ * eventos repassados pelo main.js via IPC.
  */
 
 const THREE = require("three");
 const { RoomFactory } = require("./RoomFactory");
+const { CameraController } = require("./CameraController");
 const {
   createAgentAvatar,
   setAgentAvatarStatus,
@@ -31,6 +36,7 @@ const {
 const { EVENT_TYPES } = require("../core/events/eventTypes");
 
 const DEPARTMENT_GAP = 3; // espaço (unidades de mundo) entre salas de departamentos vizinhos
+const CAMERA_TOGGLE_KEY = "KeyV";
 
 class SceneManager {
   /**
@@ -38,8 +44,11 @@ class SceneManager {
    * @param {object} [options]
    * @param {RoomFactory} [options.roomFactory] - injeta uma instância customizada (ex: apontando pra userData)
    * @param {(agentInfo: {agentId: string, name: string, status: string}) => void} [options.onAgentSelected]
+   * @param {(room: {departmentId: string, name: string, agents: object[]}) => void} [options.onRoomEntered] - disparado ao ANDAR pra dentro de uma sala (modo 'walk')
+   * @param {(departmentId: string) => void} [options.onRoomExited]
+   * @param {(mode: 'overview'|'walk') => void} [options.onCameraModeChanged]
    */
-  constructor(container, { roomFactory, onAgentSelected } = {}) {
+  constructor(container, { roomFactory, onAgentSelected, onRoomEntered, onRoomExited, onCameraModeChanged } = {}) {
     if (!container) {
       throw new Error("[SceneManager] um container (elemento DOM) é obrigatório.");
     }
@@ -47,12 +56,22 @@ class SceneManager {
     this.container = container;
     this.roomFactory = roomFactory || new RoomFactory();
     this.onAgentSelected = onAgentSelected || null;
+    this.onRoomEntered = onRoomEntered || null;
+    this.onRoomExited = onRoomExited || null;
+    this.onCameraModeChanged = onCameraModeChanged || null;
 
     this.scene = null;
     this.camera = null;
     this.renderer = null;
+    this.cameraController = null;
     this._clock = new THREE.Clock();
     this._animationId = null;
+
+    /** @type {'overview'|'walk'} */
+    this.cameraMode = "overview";
+    this._overviewCameraPosition = null;
+    this._overviewCameraQuaternion = null;
+    this._currentRoomId = null; // sala em que o usuário está "dentro", no modo walk
 
     /** @type {Map<string, THREE.Group>} departmentId -> sala já posicionada no mundo */
     this.roomGroups = new Map();
@@ -71,6 +90,7 @@ class SceneManager {
     this._pointer = new THREE.Vector2();
     this._onPointerDown = this._onPointerDown.bind(this);
     this._onResize = this._onResize.bind(this);
+    this._onToggleCameraKey = this._onToggleCameraKey.bind(this);
   }
 
   // =========================================================
@@ -93,6 +113,8 @@ class SceneManager {
     this.container.innerHTML = "";
     this.container.appendChild(this.renderer.domElement);
 
+    this.cameraController = new CameraController(this.camera, this.renderer.domElement);
+
     this.scene.add(new THREE.AmbientLight(0x404040, 2));
     const directional = new THREE.DirectionalLight(0xffffff, 1);
     directional.position.set(10, 20, 10);
@@ -102,6 +124,7 @@ class SceneManager {
     this.scene.add(new THREE.GridHelper(80, 80, 0x334155, 0x1e293b));
 
     window.addEventListener("resize", this._onResize);
+    window.addEventListener("keydown", this._onToggleCameraKey);
     this.renderer.domElement.addEventListener("pointerdown", this._onPointerDown);
 
     this._animate();
@@ -113,6 +136,11 @@ class SceneManager {
 
     for (const avatar of this.avatars.values()) {
       updateAgentAvatarMovement(avatar, delta);
+    }
+
+    if (this.cameraMode === "walk") {
+      this.cameraController.update(delta);
+      this._checkRoomEntry();
     }
 
     this.renderer.render(this.scene, this.camera);
@@ -128,9 +156,15 @@ class SceneManager {
   _onPointerDown(event) {
     if (!this.onAgentSelected) return;
 
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    this._pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    this._pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    if (this.cameraMode === "walk") {
+      // Com o ponteiro travado (pointer lock), o cursor visível não se
+      // move — a "mira" é sempre o centro exato da tela.
+      this._pointer.set(0, 0);
+    } else {
+      const rect = this.renderer.domElement.getBoundingClientRect();
+      this._pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      this._pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    }
 
     this._raycaster.setFromCamera(this._pointer, this.camera);
     const intersects = this._raycaster.intersectObjects(Array.from(this.avatars.values()), true);
@@ -141,10 +175,20 @@ class SceneManager {
     if (obj) this.onAgentSelected(getAgentAvatarInfo(obj));
   }
 
+  _onToggleCameraKey(event) {
+    if (event.code === CAMERA_TOGGLE_KEY) {
+      this.setCameraMode(this.cameraMode === "walk" ? "overview" : "walk");
+    }
+  }
+
   dispose() {
     if (this._animationId) cancelAnimationFrame(this._animationId);
-    if (typeof window !== "undefined") window.removeEventListener("resize", this._onResize);
+    if (typeof window !== "undefined") {
+      window.removeEventListener("resize", this._onResize);
+      window.removeEventListener("keydown", this._onToggleCameraKey);
+    }
     this.renderer?.domElement.removeEventListener("pointerdown", this._onPointerDown);
+    this.cameraController?.disable();
 
     for (const group of this.roomGroups.values()) this._disposeObject3D(group);
     for (const avatar of this.avatars.values()) this._disposeObject3D(avatar);
@@ -160,6 +204,89 @@ class SceneManager {
         else obj.material.dispose();
       }
     });
+  }
+
+  // =========================================================
+  // Modo de câmera: visão geral <-> passeio livre
+  // =========================================================
+
+  /**
+   * Alterna entre a câmera de visão geral (fixa, de cima) e o modo
+   * passeio (livre, primeira pessoa — WASD + mouse). Chamado
+   * automaticamente pela tecla V, ou manualmente por um botão de UI.
+   * @param {'overview'|'walk'} mode
+   */
+  setCameraMode(mode) {
+    if (mode === this.cameraMode || !this.camera) return;
+
+    if (mode === "walk") {
+      // Guarda a câmera de visão geral pra restaurar depois.
+      this._overviewCameraPosition = this.camera.position.clone();
+      this._overviewCameraQuaternion = this.camera.quaternion.clone();
+
+      // Começa num ponto neutro em frente às salas (não dentro de nenhuma).
+      const startX = this._layoutCursorX > 0 ? this._layoutCursorX / 2 : 0;
+      this.cameraController.enable({ x: startX, z: 8 });
+    } else {
+      this.cameraController.disable();
+      if (this._overviewCameraPosition) {
+        this.camera.position.copy(this._overviewCameraPosition);
+        this.camera.quaternion.copy(this._overviewCameraQuaternion);
+      } else {
+        this.camera.position.set(0, 14, 20);
+        this.camera.lookAt(0, 0, 0);
+      }
+      // Saiu do modo passeio -> conta como ter saído de qualquer sala.
+      if (this._currentRoomId && this.onRoomExited) this.onRoomExited(this._currentRoomId);
+      this._currentRoomId = null;
+    }
+
+    this.cameraMode = mode;
+    if (this.onCameraModeChanged) this.onCameraModeChanged(mode);
+  }
+
+  /** Testa se a posição atual da câmera (modo walk) está dentro de alguma sala. */
+  _checkRoomEntry() {
+    const pos = this.cameraController.getPosition();
+    let foundId = null;
+
+    for (const [departmentId, origin] of this.roomOrigins.entries()) {
+      const room = this.roomGroups.get(departmentId);
+      const { width, depth } = room.userData.footprint;
+      const halfW = width / 2;
+      const halfD = depth / 2;
+      if (Math.abs(pos.x - origin.x) <= halfW && Math.abs(pos.z - origin.z) <= halfD) {
+        foundId = departmentId;
+        break;
+      }
+    }
+
+    if (foundId === this._currentRoomId) return; // nada mudou
+
+    if (this._currentRoomId && this.onRoomExited) {
+      this.onRoomExited(this._currentRoomId);
+    }
+
+    this._currentRoomId = foundId;
+
+    if (foundId && this.onRoomEntered) {
+      const room = this.roomGroups.get(foundId);
+      this.onRoomEntered({
+        departmentId: foundId,
+        name: room.userData.departmentName || null,
+        agents: this._getAgentsInDepartment(foundId),
+      });
+    }
+  }
+
+  _getAgentsInDepartment(departmentId) {
+    const agents = [];
+    for (const [agentId, info] of this.agentSlotIndex.entries()) {
+      if (info.departmentId !== departmentId) continue;
+      const avatar = this.avatars.get(agentId);
+      if (avatar) agents.push(getAgentAvatarInfo(avatar));
+    }
+    return agents;
   }
 
   // =========================================================
@@ -234,6 +361,11 @@ class SceneManager {
     this.roomGroups.delete(departmentId);
     this.roomOrigins.delete(departmentId);
     this.occupiedSlots.delete(departmentId);
+
+    if (this._currentRoomId === departmentId) {
+      if (this.onRoomExited) this.onRoomExited(departmentId);
+      this._currentRoomId = null;
+    }
   }
 
   // =========================================================
