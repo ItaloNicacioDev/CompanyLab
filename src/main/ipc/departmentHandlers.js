@@ -15,7 +15,7 @@
  */
 
 const { run, get, all } = require("../../../backend/database/db");
-const { generateId } = require("../../../backend/utils/id");
+const { generateId } = require("../../../backend/utils/id.js");
 const { getDefaultCompanyId } = require("../../../backend/database/defaultCompany");
 const EventBus = require("../../../core/events/EventBus");
 const { EVENT_TYPES } = require("../../../core/events/eventTypes");
