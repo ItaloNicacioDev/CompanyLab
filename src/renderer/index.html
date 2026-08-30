@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CompanyLab</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ SHELL ══ -->
+<div id="app">
+
+  <!-- CANVAS 3D — sempre visível atrás de tudo -->
+  <div id="world-canvas"></div>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar glass">
+    <div class="logo">
+      <span class="logo-mark">CL</span>
+      <span class="logo-text">CompanyLab</span>
+    </div>
+
+    <nav class="nav">
+      <button class="nav-item active" data-view="office">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        3D Office
+      </button>
+      <button class="nav-item" data-view="dashboard">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        Dashboard
+      </button>
+      <button class="nav-item" data-view="agents">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        Agentes
+      </button>
+      <button class="nav-item" data-view="departments">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+        Departamentos
+      </button>
+      <button class="nav-item" data-view="tasks">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Tarefas
+      </button>
+      <button class="nav-item" data-view="chat">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Chat
+        <span class="badge" id="chat-badge">0</span>
+      </button>
+      <button class="nav-item" data-view="runtimes">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
+        Runtimes
+      </button>
+    </nav>
+
+    <!-- status rápido no rodapé -->
+    <div class="sidebar-footer">
+      <span class="status-dot status-idle" id="sys-status-dot"></span>
+      <span id="sys-status-label" class="status-label">Sistema pronto</span>
+    </div>
+  </aside>
+
+  <!-- CONTEÚDO PRINCIPAL -->
+  <div class="main">
+
+    <!-- TOP BAR -->
+    <header class="topbar glass">
+      <span class="breadcrumb" id="current-view">3D Office</span>
+      <div class="topbar-actions" id="topbar-actions">
+        <!-- preenchido por JS conforme a view -->
+      </div>
+    </header>
+
+    <!-- VIEWS -->
+    <div class="views-wrap" id="views-wrap">
+
+      <!-- 3D OFFICE (fullscreen — canvas cobre o background) -->
+      <div class="view view-office active" id="view-office">
+        <!-- toolbar flutuante sobre o canvas -->
+        <div class="office-hud glass">
+          <button class="hud-btn" id="btn-reset-cam">⟳ Camera</button>
+          <button class="hud-btn" id="btn-toggle-labels">Rótulos</button>
+        </div>
+        <!-- painel lateral de agente selecionado -->
+        <div class="agent-panel glass hidden" id="agent-panel">
+          <div class="agent-panel-header">
+            <div class="ap-avatar" id="ap-avatar">?</div>
+            <div>
+              <div class="ap-name" id="ap-name">—</div>
+              <div class="ap-role" id="ap-role">—</div>
+            </div>
+          </div>
+          <div class="ap-rows">
+            <div class="ap-row"><span>Dept</span><span id="ap-dept">—</span></div>
+            <div class="ap-row"><span>Runtime</span><span id="ap-runtime">—</span></div>
+            <div class="ap-row"><span>Status</span><span id="ap-status">—</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DASHBOARD -->
+      <div class="view view-panel" id="view-dashboard">
+        <div class="stats-row">
+          <div class="stat-card"><span class="stat-val" id="stat-agents">0</span><span class="stat-lbl">Agentes</span></div>
+          <div class="stat-card"><span class="stat-val" id="stat-tasks">0</span><span class="stat-lbl">Tarefas ativas</span></div>
+          <div class="stat-card"><span class="stat-val" id="stat-projects">0</span><span class="stat-lbl">Projetos</span></div>
+          <div class="stat-card"><span class="stat-val" id="stat-departments">0</span><span class="stat-lbl">Departamentos</span></div>
+        </div>
+        <div class="two-col">
+          <div class="panel glass">
+            <h3 class="panel-title">Atividade recente</h3>
+            <div class="activity-feed" id="activity-feed"></div>
+          </div>
+          <div class="panel glass">
+            <h3 class="panel-title">Status dos agentes</h3>
+            <div class="agent-status-list" id="agent-status-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AGENTS -->
+      <div class="view view-panel" id="view-agents">
+        <div class="view-header">
+          <h2>Agentes</h2>
+          <button class="btn-primary" id="btn-create-agent">+ Novo agente</button>
+        </div>
+        <div class="card-grid" id="agents-grid"></div>
+      </div>
+
+      <!-- DEPARTMENTS -->
+      <div class="view view-panel" id="view-departments">
+        <div class="view-header">
+          <h2>Departamentos</h2>
+          <button class="btn-primary" id="btn-create-dept">+ Novo departamento</button>
+        </div>
+        <div class="card-grid" id="departments-grid"></div>
+      </div>
+
+      <!-- TASKS -->
+      <div class="view view-panel" id="view-tasks">
+        <div class="view-header">
+          <h2>Tarefas</h2>
+          <div class="task-filters">
+            <button class="filter-btn active" data-filter="all">Todas</button>
+            <button class="filter-btn" data-filter="pending">Pendente</button>
+            <button class="filter-btn" data-filter="in_progress">Em andamento</button>
+            <button class="filter-btn" data-filter="completed">Concluída</button>
+          </div>
+        </div>
+        <div class="tasks-list" id="tasks-list"></div>
+      </div>
+
+      <!-- CHAT -->
+      <div class="view view-panel" id="view-chat">
+        <div class="chat-wrap glass">
+          <div class="chat-header">
+            <span># empresa-geral</span>
+          </div>
+          <div class="chat-messages" id="chat-messages"></div>
+          <div class="chat-input-row">
+            <input id="chat-input" type="text" placeholder="Mensagem ou @agente..." />
+            <button class="btn-primary" id="btn-send">Enviar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- RUNTIMES -->
+      <div class="view view-panel" id="view-runtimes">
+        <div class="view-header"><h2>Runtimes</h2></div>
+        <div class="runtimes-list" id="runtimes-list"></div>
+      </div>
+
+    </div><!-- /views-wrap -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ═══════════════════════════════════════════ MODALS ══ -->
+<div class="modal-overlay" id="modal-overlay">
+
+  <!-- Modal: novo agente -->
+  <div class="modal glass" id="modal-create-agent">
+    <div class="modal-header">
+      <h3>Novo Agente</h3>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>Nome</label><input id="agent-name" type="text" /></div>
+      <div class="form-group"><label>Papel / Role</label><input id="agent-role" type="text" /></div>
+      <div class="form-group"><label>Departamento</label><select id="agent-department"></select></div>
+      <div class="form-group"><label>Runtime</label>
+        <select id="agent-runtime">
+          <option value="opencode">OpenCode</option>
+          <option value="codex">Codex CLI</option>
+          <option value="claude-code">Claude Code</option>
+          <option value="ollama">Ollama</option>
+          <option value="lmstudio">LM Studio</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Personalidade</label><textarea id="agent-personality" rows="3"></textarea></div>
+      <div class="form-group"><label>Skills (vírgula)</label><input id="agent-skills" type="text" /></div>
+      <div class="form-group checkbox"><input id="agent-is-ceo" type="checkbox" /><label>CEO</label></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary modal-cancel">Cancelar</button>
+      <button class="btn-primary" id="btn-save-agent">Criar</button>
+    </div>
+  </div>
+
+  <!-- Modal: novo departamento -->
+  <div class="modal glass" id="modal-create-dept">
+    <div class="modal-header">
+      <h3>Novo Departamento</h3>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>Nome</label><input id="dept-name" type="text" /></div>
+      <div class="form-group"><label>Descrição</label><textarea id="dept-description" rows="2"></textarea></div>
+      <div class="form-group"><label>Tipo de sala</label>
+        <select id="dept-room-type">
+          <option value="generic">Generic</option>
+          <option value="development">Development</option>
+          <option value="marketing">Marketing</option>
+          <option value="finance">Finance</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary modal-cancel">Cancelar</button>
+      <button class="btn-primary" id="btn-save-dept">Criar</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="renderer.js"></script>
+</body>
+</html>
