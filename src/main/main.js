@@ -17,6 +17,12 @@ const { app, ipcMain } = require("electron");
 
 const { initDatabase, closeDatabase } = require("../../backend/database/db");
 const { createMainWindow } = require("./windows/mainWindow");
+const EventBus = require("../../core/events/EventBus");
+
+// Referência da janela principal — precisa existir fora de bootstrap()
+// pra dois lugares poderem usá-la: o listener do EventBus (repassar
+// eventos reais pro renderer) e o handler de 'activate' do macOS.
+let mainWindow = null;
 
 // Handlers IPC
 const registerAgentHandlers      = require("./ipc/agentHandlers");
@@ -47,7 +53,20 @@ async function bootstrap() {
   registerTaskHandlers(ipcMain);
 
   // 3. Janela principal
-  createMainWindow();
+  mainWindow = createMainWindow();
+
+  // Repassa TODO evento real da empresa pro renderer (seção 34 do spec)
+  // — é isso que faz o SceneManager (3D) e o dashboard reagirem sem o
+  // main process precisar saber nada sobre Three.js ou DOM.
+  EventBus.onAnyEvent((event) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("event", event);
+    }
+  });
+
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
 }
 
 app.whenReady().then(bootstrap).catch((err) => {
@@ -59,7 +78,10 @@ app.whenReady().then(bootstrap).catch((err) => {
 app.on("activate", () => {
   const { BrowserWindow } = require("electron");
   if (BrowserWindow.getAllWindows().length === 0) {
-    createMainWindow();
+    mainWindow = createMainWindow();
+    mainWindow.on("closed", () => {
+      mainWindow = null;
+    });
   }
 });
 
