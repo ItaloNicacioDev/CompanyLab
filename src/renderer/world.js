@@ -26,6 +26,11 @@ const ROOM_RADIUS   = 24;
 const RW = 13, RH = 3.8, RD = 13;   // room width, height, depth
 const DOOR_W = 3.5, DOOR_H = 2.6;
 
+// Zoom da rodinha do mouse (só ativo com o ponteiro destravado)
+const OVERVIEW_ZOOM_SPEED  = 0.02;  // unidades de mundo por unidade de deltaY
+const OVERVIEW_MIN_HEIGHT  = 1.2;   // nunca deixa a câmera descer pra dentro do chão
+const OVERVIEW_MAX_DIST    = 100;   // não deixa afastar demais do escritório
+
 const STATUS_COLORS = {
   working: 0x22c55e,
   idle:    0x475569,
@@ -217,7 +222,37 @@ class World {
     document.addEventListener('keyup', (e) => {
       this.keys[e.code] = false;
     });
+
+    // Zoom (rodinha do mouse) — só na visão geral (ponteiro destravado).
+    // Em modo FPS a rodinha não faz nada, pra não conflitar com o
+    // movimento/sprint do WASD.
+    canvas.addEventListener('wheel', (e) => {
+      if (this.isLocked) return;
+      e.preventDefault();
+      this._zoomOverview(e.deltaY);
+    }, { passive: false });
   }
+
+  /**
+   * Aproxima/afasta a câmera na direção pra onde ela já está olhando
+   * (dolly zoom) — funciona com a câmera em qualquer posição/ângulo,
+   * não depende de setPassive() ter sido chamado antes.
+   * @param {number} deltaY - e.deltaY do evento 'wheel'
+   */
+  _zoomOverview(deltaY) {
+    const forward = new THREE.Vector3();
+    this.camera.getWorldDirection(forward);
+
+    // Scroll pra cima (deltaY negativo) = aproxima; pra baixo = afasta.
+    const step = -deltaY * OVERVIEW_ZOOM_SPEED;
+    this.camera.position.addScaledVector(forward, step);
+
+    // Não deixa a câmera atravessar o chão nem se afastar demais do escritório.
+    this.camera.position.y = Math.max(this.camera.position.y, OVERVIEW_MIN_HEIGHT);
+    const dist = this.camera.position.length();
+    if (dist > OVERVIEW_MAX_DIST) {
+      this.camera.position.setLength(OVERVIEW_MAX_DIST);
+    }
 
   _tryInteract() {
     if (this.gazedAgent) {
