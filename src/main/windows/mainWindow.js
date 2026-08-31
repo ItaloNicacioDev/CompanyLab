@@ -36,6 +36,7 @@ function createMainWindow() {
     show: false, // só aparece no 'ready-to-show', evita o flash de tela branca
     backgroundColor: "#0f172a",
     autoHideMenuBar: true,
+    icon: path.join(__dirname, "..", "..", "..", "assets", "icons", "icon.ico"),
     webPreferences: {
       preload: path.join(__dirname, "..", "preload.js"),
       nodeIntegration: true,
