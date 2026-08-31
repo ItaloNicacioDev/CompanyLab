@@ -1,0 +1,176 @@
+# ==========================================
+# CompanyLab - Git Ignore
+# Electron + Node.js
+# ==========================================
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Electron
+electron/
+electron/dist/
+electron/out/
+
+# Build output
+dist/
+build/
+out/
+release/
+releases/
+
+# Packaging
+*.exe
+*.msi
+*.dmg
+*.app
+*.deb
+*.rpm
+*.snap
+*.AppImage
+
+# Electron Builder
+electron-builder.yml
+electron-builder.yaml
+*.blockmap
+latest.yml
+latest-mac.yml
+latest-linux.yml
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime data
+*.pid
+*.pid.lock
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Local configuration
+*.local
+*.local.*
+config.local.*
+settings.local.*
+
+# Cache
+.cache/
+.parcel-cache/
+.vite/
+vite.config.timestamp-*.mjs
+.eslintcache
+.stylelintcache
+
+# TypeScript
+*.tsbuildinfo
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+.temp/
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDEs
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+.idea/
+*.iml
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Windows
+*.stackdump
+
+# Generated files
+generated/
+generated-files/
+
+# Database / local application data
+*.sqlite
+*.sqlite3
+*.db
+data/
+userdata/
+local-data/
+
+# Test artifacts
+test-results/
+playwright-report/
+blob-report/
+
+# Documentation generated output
+docs/.vitepress/dist/
+
+# Backup files
+*.bak
+*.backup
+*.old
+*~
+
+# Crash dumps
+*.dmp
+
+# Security / certificates / keys
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Local AI / agent data
+.agent/
+.agents/
+.agent-data/
+agent-data/
+memory/
+memories/
+
+# Local CompanyLab runtime data
+.companylab/
+companylab-data/
+companylab-local/
+
+# Secrets / credentials
+credentials.json
+secrets.json
+tokens.json
+auth.json
+
+# MCP / local tool configuration
+.mcp/
+mcp-local.json
+
+# Package manager
+.npm/
+.pnpm-store/
+.yarn/
+.yarn-cache/
+
+# Electron temporary files
+electron-builder-cache/
+electron-builder-temp/
