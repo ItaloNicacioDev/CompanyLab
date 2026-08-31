@@ -165,6 +165,139 @@ body {
 }
 .hud-btn:hover { background: rgba(255,255,255,0.06); color: var(--tx1); }
 
+/* ── Overlay "Explorar Escritório" ───────────────────────
+   Cobre o PLANO 3D INTEIRO de propósito (inset:0): o clique já está
+   ligado neste elemento (#world-start) no renderer.js, então cobrir a
+   tela toda é o que faz "clicar em qualquer lugar do 3D" funcionar —
+   antes só o textinho sem estilo (sem tamanho definido) recebia clique. */
+.world-start-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: radial-gradient(ellipse at center, rgba(11, 17, 32, 0.2) 0%, rgba(11, 17, 32, 0.62) 100%);
+  transition: background 0.2s ease;
+}
+.world-start-overlay:hover {
+  background: radial-gradient(ellipse at center, rgba(11, 17, 32, 0.1) 0%, rgba(11, 17, 32, 0.5) 100%);
+}
+
+.wso-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 30px 44px;
+  border-radius: 16px;
+  background: var(--surface);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+  /* Deixa o clique "atravessar" pro overlay pai — sem isso, clicar
+     exatamente em cima da caixinha central não contaria como clique
+     no #world-start, recriando o mesmo problema numa área menor. */
+  pointer-events: none;
+}
+
+.wso-icon {
+  font-size: 30px;
+  color: var(--accent);
+  text-shadow: 0 0 18px var(--accent-glow);
+  animation: wso-pulse 2.4s ease-in-out infinite;
+}
+@keyframes wso-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.15); }
+}
+
+.wso-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--tx1);
+  letter-spacing: -0.2px;
+}
+
+.wso-keys {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 5px 4px;
+  font-size: 12.5px;
+  color: var(--tx3);
+}
+
+.wso-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  padding: 2px 7px;
+  margin: 0 5px 0 12px;
+  border-radius: 5px;
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid var(--border);
+  color: var(--tx1);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: 'Segoe UI', monospace;
+}
+.wso-key:first-child { margin-left: 0; }
+
+/* ── Crosshair (modo FPS travado) ────────────────────────── */
+.crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  pointer-events: none;
+}
+.crosshair.hidden { display: none; }
+.ch-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 3px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
+}
+.ch-h, .ch-v {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.5);
+}
+.ch-h { top: 50%; left: 0; right: 0; height: 1px; transform: translateY(-50%); }
+.ch-v { left: 50%; top: 0; bottom: 0; width: 1px; transform: translateX(-50%); }
+
+/* ── Prompt de interação: "[E] Entrar em Dev" ────────────── */
+.world-prompt {
+  position: absolute;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: var(--surface);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+  color: var(--tx1);
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+}
+.world-prompt.hidden { display: none; }
+
 /* Agent info panel */
 .agent-panel {
   position: absolute; top: 14px; right: 14px;
