@@ -1,6 +1,6 @@
 {
   "name": "companylab",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "AI Company Operating System - Virtual AI Company Desktop App",
   "main": "src/main/main.js",
   "scripts": {
