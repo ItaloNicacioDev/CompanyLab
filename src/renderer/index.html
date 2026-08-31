@@ -5,14 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CompanyLab</title>
   <link rel="stylesheet" href="styles.css" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════════════════════ SHELL ══ -->
+<!-- ══════════════════════════════════════════ SHELL ══ -->
 <div id="app">
 
-  <!-- CANVAS 3D — sempre visível atrás de tudo -->
+  <!-- CANVAS 3D — preenche a tela atrás de tudo (Three.js renderiza aqui) -->
   <div id="world-canvas"></div>
 
   <!-- SIDEBAR -->
@@ -24,66 +23,85 @@
 
     <nav class="nav">
       <button class="nav-item active" data-view="office">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
         3D Office
       </button>
       <button class="nav-item" data-view="dashboard">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
         Dashboard
       </button>
       <button class="nav-item" data-view="agents">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
         Agentes
       </button>
       <button class="nav-item" data-view="departments">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
         Departamentos
       </button>
       <button class="nav-item" data-view="tasks">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         Tarefas
       </button>
       <button class="nav-item" data-view="chat">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         Chat
-        <span class="badge" id="chat-badge">0</span>
+        <span class="badge" id="chat-badge"></span>
       </button>
       <button class="nav-item" data-view="runtimes">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
         Runtimes
       </button>
     </nav>
 
-    <!-- status rápido no rodapé -->
     <div class="sidebar-footer">
       <span class="status-dot status-idle" id="sys-status-dot"></span>
-      <span id="sys-status-label" class="status-label">Sistema pronto</span>
+      <span class="status-label" id="sys-status-label">Sistema pronto</span>
     </div>
   </aside>
 
-  <!-- CONTEÚDO PRINCIPAL -->
+  <!-- MAIN -->
   <div class="main">
 
     <!-- TOP BAR -->
     <header class="topbar glass">
       <span class="breadcrumb" id="current-view">3D Office</span>
-      <div class="topbar-actions" id="topbar-actions">
-        <!-- preenchido por JS conforme a view -->
-      </div>
+      <div class="topbar-actions" id="topbar-actions"></div>
     </header>
 
     <!-- VIEWS -->
-    <div class="views-wrap" id="views-wrap">
+    <div class="views-wrap">
 
-      <!-- 3D OFFICE (fullscreen — canvas cobre o background) -->
+      <!-- ── 3D OFFICE ─────────────────────────────── -->
       <div class="view view-office active" id="view-office">
-        <!-- toolbar flutuante sobre o canvas -->
-        <div class="office-hud glass">
-          <button class="hud-btn" id="btn-reset-cam">⟳ Camera</button>
-          <button class="hud-btn" id="btn-toggle-labels">Rótulos</button>
+
+        <!-- Enter-to-explore overlay (shown when pointer NOT locked) -->
+        <div class="world-start-overlay" id="world-start">
+          <div class="wso-inner">
+            <div class="wso-icon">⊹</div>
+            <div class="wso-title">Explorar Escritório</div>
+            <div class="wso-keys">
+              <span class="wso-key">Click</span> entrar
+              <span class="wso-key">WASD</span> mover
+              <span class="wso-key">E</span> interagir
+              <span class="wso-key">Shift</span> correr
+              <span class="wso-key">ESC</span> sair
+            </div>
+          </div>
         </div>
-        <!-- painel lateral de agente selecionado -->
+
+        <!-- Crosshair (shown when pointer locked) -->
+        <div class="crosshair hidden" id="crosshair">
+          <div class="ch-dot"></div>
+          <div class="ch-h"></div>
+          <div class="ch-v"></div>
+        </div>
+
+        <!-- Interaction prompt: "[E] Entrar em Dev" -->
+        <div class="world-prompt hidden" id="world-prompt"></div>
+
+        <!-- Agent detail panel (overlay on 3D) -->
         <div class="agent-panel glass hidden" id="agent-panel">
+          <button class="agent-panel-close" id="agent-panel-close">✕</button>
           <div class="agent-panel-header">
             <div class="ap-avatar" id="ap-avatar">?</div>
             <div>
@@ -92,14 +110,21 @@
             </div>
           </div>
           <div class="ap-rows">
-            <div class="ap-row"><span>Dept</span><span id="ap-dept">—</span></div>
+            <div class="ap-row"><span>Departamento</span><span id="ap-dept">—</span></div>
             <div class="ap-row"><span>Runtime</span><span id="ap-runtime">—</span></div>
-            <div class="ap-row"><span>Status</span><span id="ap-status">—</span></div>
+            <div class="ap-row">
+              <span>Status</span>
+              <span style="display:flex;align-items:center;gap:6px">
+                <span class="status-dot" id="ap-status-dot"></span>
+                <span id="ap-status">—</span>
+              </span>
+            </div>
           </div>
         </div>
+
       </div>
 
-      <!-- DASHBOARD -->
+      <!-- ── DASHBOARD ─────────────────────────────── -->
       <div class="view view-panel" id="view-dashboard">
         <div class="stats-row">
           <div class="stat-card"><span class="stat-val" id="stat-agents">0</span><span class="stat-lbl">Agentes</span></div>
@@ -119,7 +144,7 @@
         </div>
       </div>
 
-      <!-- AGENTS -->
+      <!-- ── AGENTS ────────────────────────────────── -->
       <div class="view view-panel" id="view-agents">
         <div class="view-header">
           <h2>Agentes</h2>
@@ -128,7 +153,7 @@
         <div class="card-grid" id="agents-grid"></div>
       </div>
 
-      <!-- DEPARTMENTS -->
+      <!-- ── DEPARTMENTS ───────────────────────────── -->
       <div class="view view-panel" id="view-departments">
         <div class="view-header">
           <h2>Departamentos</h2>
@@ -137,7 +162,7 @@
         <div class="card-grid" id="departments-grid"></div>
       </div>
 
-      <!-- TASKS -->
+      <!-- ── TASKS ─────────────────────────────────── -->
       <div class="view view-panel" id="view-tasks">
         <div class="view-header">
           <h2>Tarefas</h2>
@@ -151,21 +176,19 @@
         <div class="tasks-list" id="tasks-list"></div>
       </div>
 
-      <!-- CHAT -->
+      <!-- ── CHAT ──────────────────────────────────── -->
       <div class="view view-panel" id="view-chat">
         <div class="chat-wrap glass">
-          <div class="chat-header">
-            <span># empresa-geral</span>
-          </div>
+          <div class="chat-header"><span># empresa-geral</span></div>
           <div class="chat-messages" id="chat-messages"></div>
           <div class="chat-input-row">
-            <input id="chat-input" type="text" placeholder="Mensagem ou @agente..." />
+            <input id="chat-input" type="text" placeholder="Mensagem ou @agente…" />
             <button class="btn-primary" id="btn-send">Enviar</button>
           </div>
         </div>
       </div>
 
-      <!-- RUNTIMES -->
+      <!-- ── RUNTIMES ───────────────────────────────── -->
       <div class="view view-panel" id="view-runtimes">
         <div class="view-header"><h2>Runtimes</h2></div>
         <div class="runtimes-list" id="runtimes-list"></div>
@@ -175,14 +198,12 @@
   </div><!-- /main -->
 </div><!-- /app -->
 
-<!-- ═══════════════════════════════════════════ MODALS ══ -->
+<!-- ══════════════════════════════════════════ MODALS ══ -->
 <div class="modal-overlay" id="modal-overlay">
 
-  <!-- Modal: novo agente -->
   <div class="modal glass" id="modal-create-agent">
     <div class="modal-header">
-      <h3>Novo Agente</h3>
-      <button class="modal-close">✕</button>
+      <h3>Novo Agente</h3><button class="modal-close">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-group"><label>Nome</label><input id="agent-name" type="text" /></div>
@@ -207,11 +228,9 @@
     </div>
   </div>
 
-  <!-- Modal: novo departamento -->
   <div class="modal glass" id="modal-create-dept">
     <div class="modal-header">
-      <h3>Novo Departamento</h3>
-      <button class="modal-close">✕</button>
+      <h3>Novo Departamento</h3><button class="modal-close">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-group"><label>Nome</label><input id="dept-name" type="text" /></div>
@@ -231,8 +250,12 @@
     </div>
   </div>
 
-</div>
+</div><!-- /modal-overlay -->
 
+<!-- Scripts: Three.js via npm (require), world.js, renderer.js -->
+<script>const THREE = require('three');</script>
+<script src="world.js"></script>
 <script src="renderer.js"></script>
+
 </body>
 </html>

@@ -16,6 +16,7 @@
 const { app, ipcMain } = require("electron");
 
 const { initDatabase, closeDatabase } = require("../../backend/database/db");
+const AgentManager = require("../../agents/AgentManager");
 const { createMainWindow } = require("./windows/mainWindow");
 const EventBus = require("../../core/events/EventBus");
 
@@ -42,6 +43,9 @@ if (!gotTheLock) {
 async function bootstrap() {
   // 1. Banco de dados
   await initDatabase();
+
+  // 1.5. Inicia o Manager de Agentes na Memória RAM
+  await AgentManager.init();
 
   // 2. Handlers IPC
   registerAgentHandlers(ipcMain);
