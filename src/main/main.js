@@ -17,6 +17,7 @@ const { app, ipcMain } = require("electron");
 
 const { initDatabase, closeDatabase } = require("../../backend/database/db");
 const AgentManager = require("../../agents/AgentManager");
+const Orchestrator = require("../../core/orchestrator/Orchestrator");
 const { createMainWindow } = require("./windows/mainWindow");
 const EventBus = require("../../core/events/EventBus");
 
@@ -46,6 +47,9 @@ async function bootstrap() {
 
   // 1.5. Inicia o Manager de Agentes na Memória RAM
   await AgentManager.init();
+  
+  // 1.6. Inicia o Cérebro Orquestrador que liga UI -> Agentes
+  Orchestrator.init();
 
   // 2. Handlers IPC
   registerAgentHandlers(ipcMain);
