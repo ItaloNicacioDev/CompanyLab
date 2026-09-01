@@ -14,6 +14,72 @@
 'use strict';
 
 const THREE = require('three');
+const path  = require('path');
+const fs    = require('fs');
+const { pathToFileURL } = require('url');
+
+// ─── Modelos 3D reais (assets/agents/models) ──────────────────────────────────
+// Se existir um .glb com o nome certo aqui dentro, ele substitui o boneco
+// procedural (cilindro/esfera) por um modelo de verdade. Se o arquivo ainda
+// não existir, o boneco procedural continua sendo usado normalmente — é um
+// upgrade opcional, não uma dependência obrigatória. Ver assets/agents/models/README.md
+// pra especificação completa (nomes de arquivo, esqueleto, materiais).
+const MODELS_DIR = path.join(__dirname, '..', '..', 'assets', 'agents', 'models');
+const MODEL_CACHE = new Map();   // fileName -> Promise<{root:THREE.Object3D, clips:THREE.AnimationClip[]}|null>
+const TARGET_HEIGHT = 1.5;       // altura alvo (metros) pra normalizar qualquer .glb que caia aqui
+let gltfLoaderModulePromise = null;
+
+function getGLTFLoaderModule() {
+  // GLTFLoader.js (dentro de three/examples/jsm) é ES Module puro — não dá
+  // pra usar require() nele como no resto do projeto (CommonJS). O Node
+  // que roda dentro do Electron (nodeIntegration: true) suporta import()
+  // dinâmico dentro de um arquivo CommonJS, então usamos isso aqui.
+  if (!gltfLoaderModulePromise) {
+    gltfLoaderModulePromise = import('three/examples/jsm/loaders/GLTFLoader.js');
+  }
+  return gltfLoaderModulePromise;
+}
+
+/**
+ * Carrega (e cacheia) um .glb de assets/agents/models. Retorna null se não
+ * existir/der erro — nunca lança. Normaliza escala e posição: qualquer
+ * modelo, seja qual for a escala/orientação original do arquivo original,
+ * vira um personagem de ~1,5 m com os pés em y=0 — não precisa ajustar
+ * escala manualmente por arquivo antes de soltar ele na pasta.
+ */
+async function loadAgentModel(fileName) {
+  if (MODEL_CACHE.has(fileName)) return MODEL_CACHE.get(fileName);
+
+  const promise = (async () => {
+    const filePath = path.join(MODELS_DIR, fileName);
+    if (!fs.existsSync(filePath)) return null; // ainda não existe -> modo procedural, sem warning
+
+    try {
+      const { GLTFLoader } = await getGLTFLoaderModule();
+      const loader = new GLTFLoader();
+      const gltf = await loader.loadAsync(pathToFileURL(filePath).href);
+
+      const box = new THREE.Box3().setFromObject(gltf.scene);
+      const size = box.getSize(new THREE.Vector3());
+      const scale = TARGET_HEIGHT / (size.y || 1);
+
+      const wrapper = new THREE.Group();
+      const inner = new THREE.Group();
+      inner.position.y = -box.min.y; // pés em y=0 (em unidades originais, antes de escalar)
+      inner.add(gltf.scene);
+      wrapper.add(inner);
+      wrapper.scale.setScalar(scale);
+
+      return { root: wrapper, clips: gltf.animations || [] };
+    } catch (err) {
+      console.warn('[World] Falha ao carregar modelo 3D "' + fileName + '", usando boneco procedural.', err);
+      return null;
+    }
+  })();
+
+  MODEL_CACHE.set(fileName, promise);
+  return promise;
+}
 
 // ─── World Constants ──────────────────────────────────────────────────────────
 const PLAYER_HEIGHT = 1.7;
@@ -447,6 +513,12 @@ class World {
 
         this.scene.add(group);
 
+        // Tenta trocar o boneco procedural por um modelo 3D de verdade,
+        // se existir em assets/agents/models (ver README lá dentro).
+        // Assíncrono e "best effort": se não achar o arquivo, o boneco
+        // procedural que já está na tela continua exatamente como está.
+        this._tryAttachRealModel(group, this._parseAvatarConfig(agent));
+
         const labelEl = this._makeAgentLabelEl(agent);
         this.labelLayer.appendChild(labelEl);
 
@@ -500,6 +572,74 @@ class World {
     if (amount < 0) c.multiplyScalar(1 + amount);
     else c.lerp(new THREE.Color(0xffffff), amount);
     return c;
+  }
+
+  /** Nome do arquivo .glb esperado pra essa combinação de aparência (ver assets/agents/models/README.md). */
+  _modelFileFor(av) {
+    if (av.furry) {
+      const known = ['fox', 'wolf', 'cat', 'rabbit'];
+      const species = known.includes(av.furSpecies) ? av.furSpecies : 'fox';
+      return `furry_${species}.glb`;
+    }
+    return 'human_base.glb';
+  }
+
+  /**
+   * Tenta substituir o boneco procedural (já visível) por um modelo 3D
+   * de verdade carregado de assets/agents/models. Roda em background —
+   * não bloqueia nada, e se o arquivo não existir simplesmente não faz
+   * nada (o procedural continua sendo o boneco final).
+   */
+  async _tryAttachRealModel(group, av) {
+    const fileName = this._modelFileFor(av);
+    const template = await loadAgentModel(fileName);
+    if (!template) return;          // arquivo não existe ainda -> segue procedural
+    if (!group.parent) return;      // agente já foi removido/repopulado nesse meio-tempo
+
+    const model = template.clone(true);
+    model.traverse(child => {
+      if (!child.isMesh) return;
+      child.castShadow = true;
+      child.material = Array.isArray(child.material)
+        ? child.material.map(m => m.clone())
+        : child.material.clone();
+      // A geometria NÃO é clonada de propósito (clone barato, reaproveita
+      // a mesma malha carregada do disco pra todos os agentes iguais) —
+      // então nunca pode ser descartada no populate(), só a instância do
+      // material. Ver o dispose loop em populate().
+      child.userData.sharedGeometry = true;
+      this._tintModelMesh(child, av);
+    });
+
+    // Esconde (não remove) o boneco procedural — fica como fallback vivo:
+    // se um dia o .glb for removido, um novo populate() volta a mostrá-lo.
+    group.children.forEach(c => { c.visible = false; });
+    model.userData.isRealModel = true;
+    group.add(model);
+    group.userData.modelRoot = model;
+  }
+
+  /**
+   * Pinta um mesh do modelo carregado de acordo com o nome do material/mesh.
+   * Convenção esperada nos arquivos .glb (ver README): materiais chamados
+   * Skin/Fur, Hair, Outfit e Pants controlam a customização do agente —
+   * qualquer outro nome (sapato, botão, etc.) fica com a cor original do
+   * arquivo, sem ser mexido.
+   */
+  _tintModelMesh(mesh, av) {
+    const key = ((mesh.material && mesh.material.name) || mesh.name || '').toLowerCase();
+    const applyTo = (mat, hexColor) => { if (mat && mat.color) mat.color.set(hexColor); };
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+
+    if (key.includes('skin') || key.includes('fur')) {
+      mats.forEach(m => applyTo(m, av.furry ? av.furColor : av.skinColor));
+    } else if (key.includes('hair')) {
+      mats.forEach(m => applyTo(m, av.hairColor));
+    } else if (key.includes('outfit') || key.includes('hoodie') || key.includes('shirt')) {
+      mats.forEach(m => applyTo(m, av.outfitColor));
+    } else if (key.includes('pants')) {
+      mats.forEach(m => applyTo(m, this._shade(av.outfitColor, -0.45)));
+    }
   }
 
   /**
@@ -1149,7 +1289,7 @@ class World {
     });
     this.agentObjs.forEach(a => {
       a.group.traverse(c => {
-        if (c.geometry) c.geometry.dispose();
+        if (c.geometry && !c.userData.sharedGeometry) c.geometry.dispose();
         if (c.material) {
           if (Array.isArray(c.material)) c.material.forEach(m => m.dispose());
           else c.material.dispose();
