@@ -503,12 +503,14 @@ class World {
   }
 
   /**
-   * Boneco 3D estilizado (não é mais um "peão de tabuleiro" cilindro+esfera):
-   * pernas e braços são grupos articulados (pivots nos quadris/ombros) pra
+   * Boneco 3D estilizado, proporção "chibi" (cabeça grande, corpo curto e
+   * arredondado) pra ficar parecido com a referência do usuário — nada de
+   * torso/perna em caixa reta (isso que deixava o boneco "quadrado/robô").
+   * Pernas e braços são grupos articulados (pivots nos quadris/ombros) pra
    * dar ciclo de passada de verdade ao andar, gesto de digitação ao
    * trabalhar, e um leve "olhar ao redor" quando ocioso — ver
    * _updateAgentAnims. Cabeça é um Group próprio (headGroup) pra cabelo/
-   * orelhas/rabo furry acompanharem o giro da cabeça.
+   * orelhas/focinho/rabo furry acompanharem o giro da cabeça.
    */
   _makeAgentMesh(agent) {
     const statusColor = STATUS_COLORS[agent.status] ?? STATUS_COLORS.idle;
@@ -519,15 +521,22 @@ class World {
     const outfitColor = av.outfitColor;
     const pantsColor  = this._shade(outfitColor, -0.45);
     const skinMat     = new THREE.MeshStandardMaterial({ color: av.skinColor, roughness: 0.7 });
+    // Furries são cobertos de pelo da cabeça às mãos/pés — usar a cor de
+    // pele humana ali ficaria com "cara de careca disfarçado"; por isso,
+    // tudo que seria "pele" vira `bodyMat` (pelo se furry, pele se não).
+    const furMat  = av.furry ? new THREE.MeshStandardMaterial({ color: av.furColor, roughness: 0.85 }) : null;
+    const bodyMat = av.furry ? furMat : skinMat;
 
-    const HIP_Y     = 0.5;
-    const TORSO_H   = 0.58;
+    const HIP_Y     = 0.46;
+    const TORSO_H   = 0.5;
     const SHOULDER_Y = HIP_Y + TORSO_H;
-    const HEAD_R    = 0.2;
-    const HEAD_Y    = SHOULDER_Y + 0.08 + HEAD_R;
+    const HEAD_R    = 0.24; // cabeça grande = proporção chibi, como na referência
+    const HEAD_Y    = SHOULDER_Y + 0.03 + HEAD_R * 0.85;
 
-    // ── Pernas — pivots no quadril pra poderem balançar ao caminhar ──
-    const legGeo = new THREE.BoxGeometry(0.13, 0.5, 0.15);
+    // ── Pernas — cilindros afunilados (coxa mais grossa, tornozelo fino),
+    // pivots no quadril pra poderem balançar ao caminhar. Muito mais
+    // arredondado que a caixa reta que tinha antes ("boneco quadrado").
+    const legGeo = new THREE.CylinderGeometry(0.075, 0.09, 0.46, 10);
     const legMat = new THREE.MeshStandardMaterial({ color: pantsColor, roughness: 0.6 });
 
     const makeLimbPivot = (x, y, mesh, meshOffsetY) => {
@@ -540,70 +549,102 @@ class World {
       return pivot;
     };
 
-    const legL = makeLimbPivot(-0.1, HIP_Y, new THREE.Mesh(legGeo, legMat), -0.25);
-    const legR = makeLimbPivot(0.1, HIP_Y, new THREE.Mesh(legGeo, legMat), -0.25);
+    const legL = makeLimbPivot(-0.11, HIP_Y, new THREE.Mesh(legGeo, legMat), -0.23);
+    const legR = makeLimbPivot(0.11, HIP_Y, new THREE.Mesh(legGeo, legMat), -0.23);
 
-    // Sapatos
-    const shoeGeo = new THREE.BoxGeometry(0.15, 0.08, 0.2);
+    // Sapatos (levemente arredondados na ponta, tipo tênis)
     const shoeMat = new THREE.MeshStandardMaterial({ color: 0x1c1917, roughness: 0.5 });
-    const shoeL = new THREE.Mesh(shoeGeo, shoeMat);
-    shoeL.position.set(0, -0.5, 0.03);
+    const makeShoe = () => {
+      const shoe = new THREE.Group();
+      const base = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 0.19), shoeMat);
+      shoe.add(base);
+      const toe = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6), shoeMat);
+      toe.scale.set(1, 0.7, 1);
+      toe.position.set(0, 0, 0.1);
+      shoe.add(toe);
+      return shoe;
+    };
+    const shoeL = makeShoe();
+    shoeL.position.set(0, -0.46, 0.02);
     legL.children[0].add(shoeL);
-    const shoeR = new THREE.Mesh(shoeGeo, shoeMat);
-    shoeR.position.set(0, -0.5, 0.03);
+    const shoeR = makeShoe();
+    shoeR.position.set(0, -0.46, 0.02);
     legR.children[0].add(shoeR);
 
-    // ── Tronco ──
+    // ── Tronco — elipsoide (esfera esticada), não caixa. É a mudança que
+    // mais tira a "cara de robô quadrado" do boneco e deixa ele redondo
+    // como a referência (moletom felpudo, sem quinas).
     const torso = new THREE.Mesh(
-      new THREE.BoxGeometry(0.4, TORSO_H, 0.22),
-      new THREE.MeshStandardMaterial({ color: outfitColor, roughness: 0.5, metalness: 0.08 })
+      new THREE.SphereGeometry(0.24, 16, 12),
+      new THREE.MeshStandardMaterial({ color: outfitColor, roughness: 0.55, metalness: 0.04 })
     );
+    torso.scale.set(0.92, TORSO_H / 0.24 / 2, 0.72);
     torso.position.y = HIP_Y + TORSO_H / 2;
     torso.castShadow = true;
     g.add(torso);
 
-    // ── Braços — pivots no ombro ──
-    const armGeo = new THREE.BoxGeometry(0.1, 0.3, 0.12);
-    const armMat = new THREE.MeshStandardMaterial({ color: outfitColor, roughness: 0.5 });
-    const handGeo = new THREE.SphereGeometry(0.06, 8, 8);
+    // Barra do capuz/gola do moletom — pequeno detalhe que ajuda a "ler"
+    // como roupa e não como pele, além de esconder a costura torso/cabeça.
+    const collar = new THREE.Mesh(
+      new THREE.TorusGeometry(0.11, 0.03, 8, 16),
+      new THREE.MeshStandardMaterial({ color: this._shade(outfitColor, -0.15), roughness: 0.6 })
+    );
+    collar.rotation.x = Math.PI / 2;
+    collar.position.y = SHOULDER_Y - 0.01;
+    g.add(collar);
+
+    // ── Braços — cilindros afunilados, pivots no ombro ──
+    const armGeo = new THREE.CylinderGeometry(0.055, 0.075, 0.28, 10);
+    const armMat = new THREE.MeshStandardMaterial({ color: outfitColor, roughness: 0.55 });
+    const handGeo = new THREE.SphereGeometry(0.065, 10, 8);
 
     const makeArm = (x) => {
       const pivot = new THREE.Group();
-      pivot.position.set(x, SHOULDER_Y - 0.03, 0);
+      pivot.position.set(x, SHOULDER_Y - 0.05, 0);
       const upper = new THREE.Mesh(armGeo, armMat);
-      upper.position.y = -0.15;
+      upper.position.y = -0.14;
       upper.castShadow = true;
       pivot.add(upper);
-      const hand = new THREE.Mesh(handGeo, skinMat);
-      hand.position.y = -0.33;
+      const hand = new THREE.Mesh(handGeo, bodyMat);
+      hand.position.y = -0.31;
       pivot.add(hand);
       g.add(pivot);
       return pivot;
     };
-    const armL = makeArm(-0.26);
-    const armR = makeArm(0.26);
+    const armL = makeArm(-0.27);
+    const armR = makeArm(0.27);
 
     // ── Cabeça (Group independente — gira sozinha pra "olhar ao redor") ──
     const headGroup = new THREE.Group();
     headGroup.position.y = HEAD_Y;
     g.add(headGroup);
 
-    const headMesh = new THREE.Mesh(new THREE.SphereGeometry(HEAD_R, 16, 12), skinMat);
+    const headMesh = new THREE.Mesh(new THREE.SphereGeometry(HEAD_R, 20, 16), bodyMat);
     headMesh.castShadow = true;
     headGroup.add(headMesh);
 
-    // Olhinhos — é o detalhe que faz parecer um personagem, não um pino
-    const eyeGeo = new THREE.SphereGeometry(0.022, 8, 8);
+    // Olhinhos grandes — é o detalhe que faz parecer um personagem
+    // "chibi" de verdade, não um pino
+    const eyeGeo = new THREE.SphereGeometry(0.028, 8, 8);
     const eyeMat = new THREE.MeshBasicMaterial({ color: 0x14161a });
     const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
-    eyeL.position.set(-0.075, 0.01, HEAD_R - 0.03);
+    eyeL.position.set(-0.085, 0.01, HEAD_R - 0.035);
     headGroup.add(eyeL);
     const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
-    eyeR.position.set(0.075, 0.01, HEAD_R - 0.03);
+    eyeR.position.set(0.085, 0.01, HEAD_R - 0.035);
     headGroup.add(eyeR);
+    // Pontinho de brilho no olho — dá vida ao rosto sem custar quase nada
+    const glintGeo = new THREE.SphereGeometry(0.009, 6, 6);
+    const glintMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const glintL = new THREE.Mesh(glintGeo, glintMat);
+    glintL.position.set(-0.078, 0.02, HEAD_R - 0.015);
+    headGroup.add(glintL);
+    const glintR = new THREE.Mesh(glintGeo, glintMat);
+    glintR.position.set(0.092, 0.02, HEAD_R - 0.015);
+    headGroup.add(glintR);
 
-    this._addHair(headGroup, av, HEAD_R);
-    if (av.furry) this._addFurryFeatures(headGroup, g, av, HEAD_R, HIP_Y);
+    if (!av.furry) this._addHair(headGroup, av, HEAD_R);
+    if (av.furry) this._addFurryFeatures(headGroup, g, av, HEAD_R, HIP_Y, furMat);
 
     // Sombra no chão
     const shadow = new THREE.Mesh(
@@ -671,29 +712,62 @@ class World {
     }
   }
 
-  /** Adiciona orelhas (na cabeça) + rabo de animal (no quadril) quando o agente é "furry". */
-  _addFurryFeatures(headGroup, g, av, headR, hipY) {
-    const furMat = new THREE.MeshStandardMaterial({ color: av.furColor, roughness: 0.9 });
+  /**
+   * Adiciona focinho, orelhas (na cabeça), rabo de animal (no quadril) e
+   * uma "franja" de pelo no topo da cabeça quando o agente é "furry".
+   * `bodyFurMat` é o mesmo material já usado na cabeça/mãos, passado pra
+   * cá pra reaproveitar (menos materiais = mais leve).
+   */
+  _addFurryFeatures(headGroup, g, av, headR, hipY, bodyFurMat) {
+    const furMat = bodyFurMat || new THREE.MeshStandardMaterial({ color: av.furColor, roughness: 0.9 });
+    const isLongEar = av.furSpecies === 'wolf' || av.furSpecies === 'rabbit';
     const earGeo = av.furSpecies === 'cat' || av.furSpecies === 'fox'
-      ? new THREE.ConeGeometry(0.055, 0.13, 8)
-      : new THREE.SphereGeometry(0.065, 8, 8); // wolf/rabbit: orelhas mais arredondadas/compridas
+      ? new THREE.ConeGeometry(0.06, 0.14, 8)
+      : new THREE.SphereGeometry(0.07, 8, 8); // wolf/rabbit: orelhas mais arredondadas/compridas
 
     const earL = new THREE.Mesh(earGeo, furMat);
     const earR = new THREE.Mesh(earGeo, furMat);
-    const earY = av.furSpecies === 'rabbit' ? headR * 1.3 : headR * 0.85;
-    earL.position.set(-0.13, earY, -0.02);
-    earR.position.set(0.13, earY, -0.02);
-    if (av.furSpecies === 'rabbit') {
-      earL.scale.set(0.6, 2.2, 0.6);
-      earR.scale.set(0.6, 2.2, 0.6);
+    const earY = av.furSpecies === 'rabbit' ? headR * 1.35 : headR * 0.9;
+    earL.position.set(-0.14, earY, -0.02);
+    earR.position.set(0.14, earY, -0.02);
+    if (isLongEar) {
+      earL.scale.set(0.6, av.furSpecies === 'rabbit' ? 2.4 : 1.6, 0.6);
+      earR.scale.set(0.6, av.furSpecies === 'rabbit' ? 2.4 : 1.6, 0.6);
     }
     earL.castShadow = earR.castShadow = true;
     headGroup.add(earL, earR);
 
+    // Focinho — sem isso a cabeça lê como "gente careca pintada", não
+    // como bicho. Um pequeno bico arredondado na frente do rosto, com
+    // uma trufa (nariz) preta na ponta.
+    const muzzleColor = this._shade(av.furColor, 0.28);
+    const muzzleMat = new THREE.MeshStandardMaterial({ color: muzzleColor, roughness: 0.85 });
+    const muzzle = new THREE.Mesh(new THREE.SphereGeometry(headR * 0.52, 12, 10), muzzleMat);
+    muzzle.scale.set(0.85, 0.65, 0.95);
+    muzzle.position.set(0, -headR * 0.28, headR * 0.72);
+    muzzle.castShadow = true;
+    headGroup.add(muzzle);
+
+    const nose = new THREE.Mesh(
+      new THREE.SphereGeometry(headR * 0.13, 8, 6),
+      new THREE.MeshStandardMaterial({ color: 0x1c1917, roughness: 0.4 })
+    );
+    nose.scale.set(1, 0.75, 0.85);
+    nose.position.set(0, -headR * 0.22, headR * 1.16);
+    headGroup.add(nose);
+
+    // Franja de pelo no topo — usa a cor de "cabelo" escolhida como um
+    // segundo tom de pelagem (padrão comum em designs furry), respeitando
+    // o estilo escolhido no builder (careca = liso, moicano = crista, etc).
+    this._addHair(headGroup, av, headR * 0.98);
+
     // Rabo, saindo da base das costas (quadril) — fica no corpo, não na cabeça
-    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.32, 8), furMat);
-    tail.position.set(0, hipY - 0.05, -0.24);
-    tail.rotation.x = Math.PI * 0.6;
+    const tailGeo = av.furSpecies === 'rabbit'
+      ? new THREE.SphereGeometry(0.09, 10, 8)
+      : new THREE.ConeGeometry(0.075, 0.34, 8);
+    const tail = new THREE.Mesh(tailGeo, furMat);
+    tail.position.set(0, hipY - 0.02, -0.26);
+    if (av.furSpecies !== 'rabbit') tail.rotation.x = Math.PI * 0.6;
     tail.castShadow = true;
     g.add(tail);
   }
