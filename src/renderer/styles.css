@@ -562,6 +562,27 @@ body {
 .form-group textarea { resize: vertical; min-height: 72px; }
 .form-group select option { background: #0f172a; }
 
+/* ── Form row (side-by-side fields) ─────────────────── */
+.form-row { display: flex; gap: 12px; }
+.form-row .form-group { flex: 1; min-width: 0; }
+
+/* ── Avatar builder (personalização do boneco) ──────── */
+.avatar-builder {
+  margin-top: 4px; padding: 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border); border-radius: 10px;
+}
+.avatar-builder-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.avatar-builder-title { font-size: 12px; font-weight: 600; color: var(--tx1); }
+.btn-small { padding: 5px 10px; font-size: 11px; }
+.form-group input[type="color"] {
+  padding: 3px; height: 34px; cursor: pointer;
+}
+.avatar-furry-options.hidden { display: none; }
+
 /* ── Scrollbars ──────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
