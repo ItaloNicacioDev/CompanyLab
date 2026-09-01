@@ -484,6 +484,7 @@ class CompanyLabUI {
       skinColor: v('agent-skin-color') || '#f1c27d',
       hairColor: v('agent-hair-color') || '#2d1b0e',
       hairStyle: v('agent-hair-style') || 'short',
+      outfitColor: v('agent-outfit-color') || '#3b82f6',
       furry:     !!document.getElementById('agent-furry')?.checked,
       furSpecies: v('agent-fur-species') || 'fox',
       furColor:  v('agent-fur-color') || '#d97706',
@@ -497,12 +498,14 @@ class CompanyLabUI {
     const skinTones = ['#f1c27d', '#ffdbac', '#e0ac69', '#c68642', '#8d5524', '#4a2c14', '#f5cba7'];
     const hairColors = ['#2d1b0e', '#0a0a0a', '#6b4423', '#c99a3f', '#b0b0b0', '#8b0000', '#3b2e5a'];
     const hairStyles = ['bald', 'short', 'long', 'mohawk', 'bun'];
+    const outfitColors = ['#3b82f6', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#0f172a', '#84cc16', '#f97316'];
     const furSpecies = ['fox', 'wolf', 'cat', 'rabbit'];
     const furColors = ['#d97706', '#78716c', '#ffffff', '#1e293b', '#a16207', '#f5f5f4'];
 
     document.getElementById('agent-skin-color').value = pick(skinTones);
     document.getElementById('agent-hair-color').value = pick(hairColors);
     document.getElementById('agent-hair-style').value = pick(hairStyles);
+    document.getElementById('agent-outfit-color').value = pick(outfitColors);
 
     const isFurry = Math.random() < 0.5;
     document.getElementById('agent-furry').checked = isFurry;
