@@ -24,6 +24,29 @@ class CompanyLabUI {
     this._bindModals();
     this._bindFilterBtns();
     this._startPolling();
+    this._bindLiveEvents();
+  }
+
+  // ─── Eventos ao vivo (EventBus -> main.js -> preload -> aqui) ──────────────
+
+  _bindLiveEvents() {
+    if (!window.onEvent) return;
+
+    // main.js retransmite TODO evento do EventBus no canal "event".
+    // Quando uma mensagem de chat chega (resposta de agente) ou o status
+    // de um agente muda, atualizamos a view relevante na hora, em vez de
+    // depender só do polling de 3s (que nem cobre a view de chat).
+    window.onEvent('event', (evt) => {
+      if (!evt || !evt.type) return;
+
+      if (evt.type === 'agent.message.sent' && this.currentView === 'chat') {
+        this._loadChat();
+      }
+
+      if (evt.type === 'agent.updated' && this.currentView === 'agents') {
+        this._loadAgents();
+      }
+    });
   }
 
   // ─── 3D World ─────────────────────────────────────────────────────────────
@@ -132,6 +155,7 @@ class CompanyLabUI {
       if (this.currentView === 'dashboard') this._loadDashboard();
       if (this.currentView === 'agents')    this._loadAgents();
       if (this.currentView === 'tasks')     this._loadTasks();
+      if (this.currentView === 'chat')      this._loadChat();
     }, 3000);
   }
 
@@ -302,7 +326,7 @@ class CompanyLabUI {
     const msgs = await ipc('chat:getMessages', 'company-general');
     const c = document.getElementById('chat-messages');
     c.innerHTML = msgs.map(m =>
-      '<div class="message ' + (m.isUser ? 'message-user' : 'message-agent') + '">' +
+      '<div class="message ' + (m.isUser ? 'message-user' : (m.type === 'error' ? 'message-error' : 'message-agent')) + '">' +
         (!m.isUser ? '<div class="message-header">' + m.sender + '</div>' : '') +
         '<div class="message-content">' + m.content + '</div>' +
         '<div class="message-time">' + new Date(m.timestamp).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }) + '</div>' +
