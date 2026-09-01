@@ -25,6 +25,10 @@ class CompanyLabUI {
     this._bindFilterBtns();
     this._startPolling();
     this._bindLiveEvents();
+
+    // Aplica nome/emoji/cor da empresa (se já tiver sido customizado)
+    // assim que o app abre, não só quando a aba Configurações é aberta.
+    ipc('company:get').then(company => this._applyCompanyBranding(company));
   }
 
   // ─── Eventos ao vivo (EventBus -> main.js -> preload -> aqui) ──────────────
@@ -128,6 +132,7 @@ class CompanyLabUI {
     const labels = {
       office:'3D Office', dashboard:'Dashboard', agents:'Agentes',
       departments:'Departamentos', tasks:'Tarefas', chat:'Chat', runtimes:'Runtimes',
+      settings:'Configurações',
     };
     document.getElementById('current-view').textContent = labels[name] || name;
 
@@ -145,6 +150,7 @@ class CompanyLabUI {
     if (name === 'tasks')       this._loadTasks();
     if (name === 'chat')        this._loadChat();
     if (name === 'runtimes')    this._loadRuntimes();
+    if (name === 'settings')    this._loadSettings();
   }
 
   // ─── Polling ───────────────────────────────────────────────────────────────
@@ -178,6 +184,9 @@ class CompanyLabUI {
     // Departments
     document.getElementById('btn-create-dept').addEventListener('click', () => this._showModal('modal-create-dept'));
     document.getElementById('btn-save-dept').addEventListener('click',  () => this._createDept());
+
+    // Settings
+    document.getElementById('btn-save-settings')?.addEventListener('click', () => this._saveSettings());
 
     // Agent panel close
     document.getElementById('agent-panel-close')?.addEventListener('click', () => this._hideAgentPanel());
@@ -342,6 +351,50 @@ class CompanyLabUI {
     await ipc('chat:sendMessage', { content });
     input.value = '';
     setTimeout(() => this._loadChat(), 400);
+  }
+
+  // ─── Configurações (personalização opcional da empresa) ────────────────────
+
+  async _loadSettings() {
+    const company = await ipc('company:get');
+    if (!company) return;
+
+    document.getElementById('settings-emoji').value = company.emoji || '';
+    document.getElementById('settings-name').value = company.name || '';
+    document.getElementById('settings-tagline').value = company.tagline || '';
+    document.getElementById('settings-description').value = company.description || '';
+    document.getElementById('settings-accent-color').value = company.accentColor || '#3b82f6';
+  }
+
+  async _saveSettings() {
+    const updates = {
+      emoji: document.getElementById('settings-emoji').value.trim() || '🏢',
+      name: document.getElementById('settings-name').value.trim(),
+      tagline: document.getElementById('settings-tagline').value.trim(),
+      description: document.getElementById('settings-description').value.trim(),
+      accentColor: document.getElementById('settings-accent-color').value,
+    };
+
+    const result = await ipc('company:update', updates);
+    if (result?.success) {
+      this._applyCompanyBranding(result.company);
+      const msg = document.getElementById('settings-saved-msg');
+      msg.textContent = 'Salvo!';
+      msg.classList.add('visible');
+      setTimeout(() => msg.classList.remove('visible'), 2000);
+    }
+  }
+
+  /** Aplica emoji/nome/cor da empresa na sidebar e no tema — chamado no boot e após salvar. */
+  _applyCompanyBranding(company) {
+    if (!company) return;
+    const markEl = document.getElementById('app-logo-mark');
+    const textEl = document.getElementById('app-logo-text');
+    if (markEl) markEl.textContent = company.emoji || 'CL';
+    if (textEl) textEl.textContent = company.name || 'CompanyLab';
+    if (company.accentColor) {
+      document.documentElement.style.setProperty('--accent', company.accentColor);
+    }
   }
 
   // ─── Runtimes ──────────────────────────────────────────────────────────────
