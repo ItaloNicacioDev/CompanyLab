@@ -456,17 +456,52 @@ class World {
           agentData: agent,
           worldPos:  worldPos.clone(),
           bobPhase:  Math.random() * Math.PI * 2,
+
+          // Estação de trabalho "de casa" — pra onde o agente sempre
+          // volta depois de circular pelo escritório (seção "bonecos
+          // precisam se movimentar entre as salas").
+          homeRoom: room,
+          homePos:  worldPos.clone(),
+          wander: {
+            state: 'idle',            // 'idle' | 'walking' | 'pausing'
+            nextWanderAt: performance.now() / 1000 + 6 + Math.random() * 18,
+            path: [],
+            pathIndex: 0,
+            returning: false,
+            pauseUntil: 0,
+            speed: 1.1 + Math.random() * 0.5,
+          },
         });
       });
     });
   }
 
+  /** Parseia `agent.avatar` (JSON salvo pelo modal de criação) com defaults sensatos. */
+  _parseAvatarConfig(agent) {
+    let cfg = {};
+    if (agent.avatar) {
+      try { cfg = JSON.parse(agent.avatar); } catch { cfg = {}; }
+    }
+    return {
+      skinColor: cfg.skinColor || '#f1c27d',
+      hairColor: cfg.hairColor || '#2d1b0e',
+      hairStyle: cfg.hairStyle || 'short',
+      furry:     !!cfg.furry,
+      furSpecies: cfg.furSpecies || 'fox',
+      furColor:  cfg.furColor || '#d97706',
+    };
+  }
+
   _makeAgentMesh(agent) {
     const color = STATUS_COLORS[agent.status] ?? STATUS_COLORS.idle;
+    const av    = this._parseAvatarConfig(agent);
     const g     = new THREE.Group();
     g.userData.agentId = agent.id;
 
-    // Body
+    // Body — continua tingido pela cor de STATUS (é o indicador real de
+    // estado do agente, seção 26/38 do spec: nunca inventar/esconder
+    // status). A personalização de aparência (seção "bonecos genéricos")
+    // fica em cima disso: pele, cabelo e traços furry.
     const body = new THREE.Mesh(
       new THREE.CylinderGeometry(0.24, 0.28, 1.15, 12),
       new THREE.MeshStandardMaterial({
@@ -478,14 +513,17 @@ class World {
     body.castShadow = true;
     g.add(body);
 
-    // Head
+    // Head — cor de pele customizável
     const head = new THREE.Mesh(
       new THREE.SphereGeometry(0.22, 14, 10),
-      new THREE.MeshStandardMaterial({ color: 0xdde4ef, roughness: 0.75 })
+      new THREE.MeshStandardMaterial({ color: av.skinColor, roughness: 0.75 })
     );
     head.position.y = 1.4;
     head.castShadow = true;
     g.add(head);
+
+    this._addHair(g, av);
+    if (av.furry) this._addFurryFeatures(g, av);
 
     // Shadow disc
     const shadow = new THREE.Mesh(
@@ -512,6 +550,69 @@ class World {
     }
 
     return g;
+  }
+
+  /** Adiciona cabelo na cabeça, no estilo escolhido (seção "bonecos genéricos"). */
+  _addHair(g, av) {
+    if (av.hairStyle === 'bald') return;
+
+    const hairMat = new THREE.MeshStandardMaterial({ color: av.hairColor, roughness: 0.8 });
+
+    if (av.hairStyle === 'short' || av.hairStyle === 'bun') {
+      // Touca curta cobrindo o topo da cabeça
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.225, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMat);
+      cap.position.y = 1.42;
+      cap.castShadow = true;
+      g.add(cap);
+
+      if (av.hairStyle === 'bun') {
+        const bun = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), hairMat);
+        bun.position.set(0, 1.62, -0.14);
+        g.add(bun);
+      }
+    } else if (av.hairStyle === 'long') {
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.225, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMat);
+      cap.position.y = 1.42;
+      g.add(cap);
+
+      // Mecha longa caindo atrás da cabeça
+      const strand = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.1, 0.42, 10), hairMat);
+      strand.position.set(0, 1.22, -0.14);
+      strand.castShadow = true;
+      g.add(strand);
+    } else if (av.hairStyle === 'mohawk') {
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.16, 0.32), hairMat);
+      strip.position.y = 1.58;
+      strip.castShadow = true;
+      g.add(strip);
+    }
+  }
+
+  /** Adiciona orelhas + rabo de animal quando o agente é "furry" (pedido do usuário). */
+  _addFurryFeatures(g, av) {
+    const furMat = new THREE.MeshStandardMaterial({ color: av.furColor, roughness: 0.9 });
+    const earGeo = av.furSpecies === 'cat' || av.furSpecies === 'fox'
+      ? new THREE.ConeGeometry(0.06, 0.14, 8)
+      : new THREE.SphereGeometry(0.07, 8, 8); // wolf/rabbit: orelhas mais arredondadas/compridas
+
+    const earL = new THREE.Mesh(earGeo, furMat);
+    const earR = new THREE.Mesh(earGeo, furMat);
+    const earY = av.furSpecies === 'rabbit' ? 1.66 : 1.56;
+    earL.position.set(-0.14, earY, -0.02);
+    earR.position.set(0.14, earY, -0.02);
+    if (av.furSpecies === 'rabbit') {
+      earL.scale.set(0.6, 2.2, 0.6);
+      earR.scale.set(0.6, 2.2, 0.6);
+    }
+    earL.castShadow = earR.castShadow = true;
+    g.add(earL, earR);
+
+    // Rabo, saindo da base das costas do corpo
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.34, 8), furMat);
+    tail.position.set(0, 0.35, -0.26);
+    tail.rotation.x = Math.PI * 0.65;
+    tail.castShadow = true;
+    g.add(tail);
   }
 
   _makeAgentLabelEl(agent) {
@@ -554,10 +655,127 @@ class World {
     if (this.isLocked) this._updateMovement(dt);
     this._updateRoomState();
     this._updateGaze(dt);
+    this._updateAgentMovement(t, dt);
     this._updateAgentAnims(t);
     this._updateHTMLLabels();
 
     this.renderer.render(this.scene, this.camera);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Movimentação ambiente entre salas
+  //
+  // Pedido do usuário: "os bonecos também precisam se movimentar entre as
+  // salas, não só ficar em suas salas trabalhando, simulando verdadeiramente
+  // um ambiente profissional". Isso é puramente visual/ambiente — não muda
+  // nem inventa STATUS do agente (seção 26/38: status continua 100% real,
+  // vindo de eventos reais) — só faz o boneco caminhar fisicamente pelo
+  // escritório de vez em quando, como aconteceria num escritório de verdade.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /** Ponto na "praça" central, logo na frente da porta de uma sala. */
+  _plazaPointFor(room) {
+    const doorPos = room.doorWorldPos.clone().setY(0);
+    // As salas ficam num círculo em volta da origem com a porta voltada
+    // pro centro, então a direção porta -> centro é simplesmente -doorPos.
+    const towardCenter = doorPos.clone().negate().normalize();
+    return doorPos.add(towardCenter.multiplyScalar(1.8));
+  }
+
+  /** Ponto aleatório dentro de uma sala, perto da entrada (não em cima das mesas). */
+  _randomSpotInRoom(room) {
+    const lx = (Math.random() - 0.5) * (RW * 0.5);
+    const lz = RD / 2 - 2.2 - Math.random() * 1.5;
+    return room.group.localToWorld(new THREE.Vector3(lx, 0, lz));
+  }
+
+  _updateAgentMovement(t, dt) {
+    for (const ao of this.agentObjs) {
+      const w = ao.wander;
+      if (!w) continue;
+
+      if (w.state === 'idle') {
+        if (t < w.nextWanderAt) continue;
+        // Agentes travados/com erro ficam parados na mesa — o sumiço seria
+        // enganoso justamente quando o usuário mais precisa ver que algo
+        // está errado (mesmo princípio de nunca esconder status real).
+        if (ao.agentData?.status === 'blocked' || ao.agentData?.status === 'error') {
+          w.nextWanderAt = t + 8;
+          continue;
+        }
+        this._startWander(ao, t);
+        continue;
+      }
+
+      if (w.state === 'pausing') {
+        if (t >= w.pauseUntil) {
+          // Hora de voltar pra estação de trabalho.
+          w.path = [...w.path].reverse();
+          w.pathIndex = 0;
+          w.returning = true;
+          w.state = 'walking';
+        }
+        continue;
+      }
+
+      if (w.state === 'walking') {
+        const target = w.path[w.pathIndex];
+        if (!target) { w.state = 'idle'; continue; }
+
+        const dx = target.x - ao.worldPos.x;
+        const dz = target.z - ao.worldPos.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+
+        if (dist < 0.08) {
+          w.pathIndex++;
+          if (w.pathIndex >= w.path.length) {
+            if (w.returning) {
+              w.state = 'idle';
+              w.returning = false;
+              w.nextWanderAt = t + 15 + Math.random() * 30;
+            } else {
+              w.state = 'pausing';
+              w.pauseUntil = t + 4 + Math.random() * 10;
+            }
+          }
+          continue;
+        }
+
+        const step = Math.min(dist, w.speed * dt);
+        ao.worldPos.x += (dx / dist) * step;
+        ao.worldPos.z += (dz / dist) * step;
+        ao.group.position.x = ao.worldPos.x;
+        ao.group.position.z = ao.worldPos.z;
+        ao.group.rotation.y = Math.atan2(dx, dz);
+      }
+    }
+  }
+
+  /** Decide um destino (a praça, ou outra sala) e monta o caminho de ida. */
+  _startWander(ao, t) {
+    const w = ao.wander;
+    const homeRoom = ao.homeRoom;
+    if (!homeRoom) return;
+
+    const otherRooms = this.rooms.filter(r => r !== homeRoom);
+    const visitOther = otherRooms.length > 0 && Math.random() < 0.55;
+
+    const ownPlaza = this._plazaPointFor(homeRoom);
+
+    if (visitOther) {
+      const targetRoom = otherRooms[Math.floor(Math.random() * otherRooms.length)];
+      const targetPlaza = this._plazaPointFor(targetRoom);
+      const insideSpot = this._randomSpotInRoom(targetRoom);
+
+      w.path = [ownPlaza, targetPlaza, insideSpot];
+    } else {
+      // Só dá uma volta pela praça e some/volta — como ir buscar um café.
+      w.path = [ownPlaza];
+    }
+
+    w.pathIndex = 0;
+    w.returning = false;
+    w.state = 'walking';
   }
 
   _updateMovement(dt) {
