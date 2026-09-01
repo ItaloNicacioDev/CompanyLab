@@ -567,3 +567,10 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(100,116,139,0.3); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(100,116,139,0.5); }
+/* ── Configurações (personalização opcional da empresa) ── */
+.settings-panel { max-width: 480px; display: flex; flex-direction: column; gap: 16px; padding: 4px 2px; }
+.settings-hint { font-size: 13px; color: var(--text-dim, #94a3b8); margin: 0 0 4px; }
+.settings-panel input[type="color"] { width: 56px; height: 34px; padding: 2px; border-radius: 8px; background: transparent; border: 1px solid rgba(255,255,255,0.12); cursor: pointer; }
+.settings-actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.settings-saved-msg { font-size: 13px; color: #4ade80; opacity: 0; transition: opacity 0.2s; }
+.settings-saved-msg.visible { opacity: 1; }
