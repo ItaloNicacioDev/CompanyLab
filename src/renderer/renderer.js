@@ -181,6 +181,13 @@ class CompanyLabUI {
     });
     document.getElementById('btn-save-agent').addEventListener('click', () => this._createAgent());
 
+    // Avatar builder: mostra/esconde opções furry, e permite gerar uma
+    // combinação de aparência aleatória com um clique (pedido: "escolher
+    // uma build aleatória, entre: cabelo, pele, cor da pele, estilo de
+    // cabelo, furry, não furry").
+    document.getElementById('agent-furry')?.addEventListener('change', () => this._toggleFurryOptions());
+    document.getElementById('btn-randomize-avatar')?.addEventListener('click', () => this._randomizeAvatar());
+
     // Departments
     document.getElementById('btn-create-dept').addEventListener('click', () => this._showModal('modal-create-dept'));
     document.getElementById('btn-save-dept').addEventListener('click',  () => this._createDept());
@@ -455,12 +462,53 @@ class CompanyLabUI {
       personality: { description: v('agent-personality') },
       skills:      v('agent-skills').split(',').map(s => s.trim()).filter(Boolean),
       isCEO:       document.getElementById('agent-is-ceo').checked,
+      avatar:      JSON.stringify(this._collectAvatarConfig()),
     });
     if (result.success) {
       this._hideModal();
       this._loadAgents();
       this._loadWorldData(); // refresh 3D world
     }
+  }
+
+  // ─── Boneco / avatar (personalização opcional do agente) ───────────────────
+
+  _toggleFurryOptions() {
+    const isFurry = document.getElementById('agent-furry').checked;
+    document.getElementById('agent-furry-options')?.classList.toggle('hidden', !isFurry);
+  }
+
+  _collectAvatarConfig() {
+    const v = id => document.getElementById(id)?.value;
+    return {
+      skinColor: v('agent-skin-color') || '#f1c27d',
+      hairColor: v('agent-hair-color') || '#2d1b0e',
+      hairStyle: v('agent-hair-style') || 'short',
+      furry:     !!document.getElementById('agent-furry')?.checked,
+      furSpecies: v('agent-fur-species') || 'fox',
+      furColor:  v('agent-fur-color') || '#d97706',
+    };
+  }
+
+  /** Sorteia uma combinação inteira de aparência e aplica nos campos do modal. */
+  _randomizeAvatar() {
+    const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+    const skinTones = ['#f1c27d', '#ffdbac', '#e0ac69', '#c68642', '#8d5524', '#4a2c14', '#f5cba7'];
+    const hairColors = ['#2d1b0e', '#0a0a0a', '#6b4423', '#c99a3f', '#b0b0b0', '#8b0000', '#3b2e5a'];
+    const hairStyles = ['bald', 'short', 'long', 'mohawk', 'bun'];
+    const furSpecies = ['fox', 'wolf', 'cat', 'rabbit'];
+    const furColors = ['#d97706', '#78716c', '#ffffff', '#1e293b', '#a16207', '#f5f5f4'];
+
+    document.getElementById('agent-skin-color').value = pick(skinTones);
+    document.getElementById('agent-hair-color').value = pick(hairColors);
+    document.getElementById('agent-hair-style').value = pick(hairStyles);
+
+    const isFurry = Math.random() < 0.5;
+    document.getElementById('agent-furry').checked = isFurry;
+    document.getElementById('agent-fur-species').value = pick(furSpecies);
+    document.getElementById('agent-fur-color').value = pick(furColors);
+    this._toggleFurryOptions();
   }
 
   async _createDept() {
