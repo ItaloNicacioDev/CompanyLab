@@ -30,6 +30,7 @@ let mainWindow = null;
 // Handlers IPC
 const registerAgentHandlers      = require("./ipc/agentHandlers");
 const registerChatHandlers       = require("./ipc/chatHandlers");
+const registerCompanyHandlers    = require("./ipc/companyHandlers");
 const registerDashboardHandlers  = require("./ipc/dashboardHandlers");
 const registerDepartmentHandlers = require("./ipc/departmentHandlers");
 const registerProjectHandlers    = require("./ipc/projectHandlers");
@@ -55,6 +56,7 @@ async function bootstrap() {
   // 2. Handlers IPC
   registerAgentHandlers(ipcMain);
   registerChatHandlers(ipcMain);
+  registerCompanyHandlers(ipcMain);
   registerDashboardHandlers(ipcMain);
   registerDepartmentHandlers(ipcMain);
   registerProjectHandlers(ipcMain);
