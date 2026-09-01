@@ -582,6 +582,7 @@ body {
   padding: 3px; height: 34px; cursor: pointer;
 }
 .avatar-furry-options.hidden { display: none; }
+.avatar-preview-hint { font-size: 11px; color: var(--tx2); margin-top: 8px; line-height: 1.5; }
 
 /* ── Scrollbars ──────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; }
