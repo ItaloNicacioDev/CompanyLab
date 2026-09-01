@@ -6,6 +6,7 @@
  */
 
 const AgentMemory = require('./soul/memory/AgentMemory');
+const runtimeSessionManager = require('../backend/runtimes/runtimeSessionManager');
 
 class Agent {
   constructor(data) {
@@ -14,6 +15,7 @@ class Agent {
     this.role = data.role;
     this.department = data.department || 'Geral';
     this.runtime = data.runtime || 'opencode';
+    this.model = data.model || null;
     this.status = data.status || 'idle';
     
     // Configurações avançadas
@@ -47,18 +49,16 @@ Aja de forma coerente com sua persona e contexto.`;
   async processMessage(content, fromName = 'Usuário') {
     // 1. Grava a mensagem recebida na memória
     await this.memory.addMessage('user', `[${fromName}]: ${content}`);
-    
-    // 2. Recupera todo o contexto (system prompt + histórico recente)
-    const context = await this.memory.getFullPromptContext();
-    
-    // 3. TODO: Aqui ocorre a chamada real para o Runtime (Ollama, OpenAI, LM Studio, etc)
-    // Simulando delay de LLM (Remover quando houver integração real com LLM Runtime)
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    const response = `Compreendido, ${fromName}. Analisei sua mensagem "${content}" com base nas minhas skills. Em breve integraremos o Runtime de IA real.`;
-    
-    // 4. Grava a resposta do próprio agente na memória
+
+    // 2. Chama de verdade o runtime configurado pro agente (OpenCode,
+    // Codex, Claude Code, Ollama, LM Studio — ver backend/runtimes/).
+    // O adapter já mantém o histórico do lado dele (sessão real), então
+    // não precisamos reinjetar o contexto da AgentMemory aqui.
+    const response = await runtimeSessionManager.sendMessage(this, `[${fromName}]: ${content}`);
+
+    // 3. Grava a resposta do próprio agente na memória
     await this.memory.addMessage('assistant', response);
-    
+
     return response;
   }
 }
