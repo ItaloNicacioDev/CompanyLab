@@ -17,6 +17,8 @@ class CompanyLabUI {
     this.tasks       = [];
     this.world       = null;
     this._pollTimer  = null;
+    this._currentPanelAgentId   = null;
+    this._currentPanelAgentName = null;
 
     this._initWorld();
     this._bindNav();
@@ -198,6 +200,21 @@ class CompanyLabUI {
     // Agent panel close
     document.getElementById('agent-panel-close')?.addEventListener('click', () => this._hideAgentPanel());
 
+    // Demitir — pelo painel do boneco selecionado no escritório 3D
+    document.getElementById('btn-ap-dismiss')?.addEventListener('click', () => {
+      this._dismissAgent(this._currentPanelAgentId, this._currentPanelAgentName);
+    });
+
+    // Demitir — pelo botão em cada card na lista de Agentes (delegação,
+    // já que os cards são recriados a cada _loadAgents())
+    document.getElementById('agents-grid')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-dismiss-id]');
+      if (!btn) return;
+      e.stopPropagation();
+      const agent = this.agents.find(a => a.id === btn.dataset.dismissId);
+      this._dismissAgent(btn.dataset.dismissId, agent?.name);
+    });
+
     // World start overlay — click to lock
     document.getElementById('world-start').addEventListener('click', () => {
       const canvas = document.querySelector('#world-canvas canvas');
@@ -210,6 +227,9 @@ class CompanyLabUI {
   _showAgentPanel(agent) {
     const panel = document.getElementById('agent-panel');
     panel.classList.remove('hidden');
+
+    this._currentPanelAgentId   = agent.id;
+    this._currentPanelAgentName = agent.name;
 
     document.getElementById('ap-avatar').textContent  = agent.name?.[0]?.toUpperCase() || '?';
     document.getElementById('ap-name').textContent    = agent.name;
@@ -282,8 +302,35 @@ class CompanyLabUI {
           (a.runtime    ? '<span class="tag">' + a.runtime    + '</span>' : '') +
           '<span class="tag status-tag-' + a.status + '">' + a.status + '</span>' +
         '</div>' +
+        '<div class="agent-card-footer">' +
+          '<button type="button" class="agent-card-dismiss" data-dismiss-id="' + a.id + '">Demitir</button>' +
+        '</div>' +
       '</div>'
     ).join('');
+  }
+
+  /**
+   * Demite (exclui) um funcionário. Pedido do usuário: "quero também a
+   * opção de excluir (demitir o funcionário)". O backend (agent:delete)
+   * já existia pronto; isso aqui é a ponta de UI, chamada tanto pelo botão
+   * no card da lista de Agentes quanto pelo painel do boneco no escritório 3D.
+   */
+  async _dismissAgent(agentId, agentName) {
+    if (!agentId) return;
+    const label = agentName ? `"${agentName}"` : 'este funcionário';
+    const confirmed = window.confirm(`Tem certeza que quer demitir ${label}? Essa ação não pode ser desfeita.`);
+    if (!confirmed) return;
+
+    const result = await ipc('agent:delete', agentId);
+    if (!result || result.success === false) {
+      window.alert('Não foi possível demitir o funcionário. Tente novamente.');
+      return;
+    }
+
+    // Some o boneco do escritório 3D e atualiza a lista/painel
+    this._hideAgentPanel();
+    if (this.currentView === 'agents') this._loadAgents();
+    this._loadWorldData();
   }
 
   // ─── Departments ───────────────────────────────────────────────────────────
