@@ -264,6 +264,26 @@ class World {
     }
   }
 
+  /**
+   * Pede o Pointer Lock explicitamente — chamado pelo overlay
+   * "Explorar Escritório" no renderer.js. Fica aqui (em vez do
+   * renderer.js fazer um `document.querySelector` solto) pra sempre
+   * usar a MESMA instância de canvas que o World já tem internamente,
+   * e pra logar caso o navegador rejeite o pedido, em vez de falhar
+   * em silêncio sem nenhuma pista no console.
+   */
+  requestEnter() {
+    if (this.isLocked) return;
+    const result = this.renderer.domElement.requestPointerLock();
+    // Chromium recente (inclui o Electron) retorna uma Promise de
+    // requestPointerLock() — se ela rejeitar, o motivo aparece aqui.
+    if (result && typeof result.catch === 'function') {
+      result.catch((err) => {
+        console.error('[World] requestPointerLock() foi rejeitado:', err);
+      });
+    }
+  }
+
   // ──────────────────────────────────────────────────────────────────────────
   // Room Builder
   // ──────────────────────────────────────────────────────────────────────────
