@@ -9,6 +9,9 @@ const AgentRepository = require('../backend/repositories/AgentRepository');
 const AgentFactory = require('./AgentFactory');
 const EventBus = require('../core/events/EventBus');
 const { EVENT_TYPES } = require('../core/events/eventTypes');
+const { run } = require('../backend/database/db');
+const { generateId } = require('../backend/utils/id.js');
+const { extractMentions, DEFAULT_CONVERSATION_ID } = require('../src/main/ipc/chatHandlers');
 
 class AgentManager {
   constructor() {
@@ -43,14 +46,14 @@ class AgentManager {
   async registerAgent(agentData) {
     const agent = await AgentFactory.createAgent(agentData);
     this.agents.set(agent.id, agent);
-    EventBus.emit(EVENT_TYPES.AGENT_UPDATED, { agentId: agent.id });
+    EventBus.emitEvent(EVENT_TYPES.AGENT_UPDATED, { agentId: agent.id });
     return agent;
   }
 
   unregisterAgent(id) {
     if (this.agents.has(id)) {
       this.agents.delete(id);
-      EventBus.emit(EVENT_TYPES.AGENT_UPDATED, { agentId: id, deleted: true });
+      EventBus.emitEvent(EVENT_TYPES.AGENT_UPDATED, { agentId: id, deleted: true });
     }
   }
 
@@ -63,30 +66,76 @@ class AgentManager {
 
     agent.status = 'working';
     await AgentRepository.updateAgentStatus(agentId, 'working'); // Mantém o status real no DB
-    EventBus.emit(EVENT_TYPES.AGENT_UPDATED, { agentId, status: 'working' });
+    EventBus.emitEvent(EVENT_TYPES.AGENT_UPDATED, { agentId, status: 'working' });
 
     try {
       const response = await agent.processMessage(messageContent, fromName);
 
       agent.status = 'idle';
       await AgentRepository.updateAgentStatus(agentId, 'idle');
-      EventBus.emit(EVENT_TYPES.AGENT_UPDATED, { agentId, status: 'idle' });
+      EventBus.emitEvent(EVENT_TYPES.AGENT_UPDATED, { agentId, status: 'idle' });
 
-      EventBus.emit(EVENT_TYPES.CHAT_MESSAGE, {
-        channel: 'company-general',
+      // BUGFIX: a resposta do agente precisa ser PERSISTIDA na mesma tabela
+      // 'messages' que o chatHandlers.js usa, senão chat:getMessages nunca
+      // a retorna pro renderer (era o motivo do @agente nunca "responder").
+      const messageId = generateId('msg');
+      const mentions = extractMentions(response);
+
+      await run(
+        `INSERT INTO messages (id, conversation_id, from_agent, to_agent, content, mentions, type) VALUES (?, ?, ?, ?, ?, ?, 'text')`,
+        [messageId, DEFAULT_CONVERSATION_ID, agent.id, null, response, JSON.stringify(mentions)]
+      );
+
+      await run("INSERT INTO activity_log (agent_id, action, metadata) VALUES (?, 'message', ?)", [
+        agent.id,
+        JSON.stringify({ fromName: agent.name, from: agent.id, content: response }),
+      ]);
+
+      // BUGFIX: EVENT_TYPES.CHAT_MESSAGE não existia (era `undefined`) e o
+      // .emit() cru nunca passava pelo canal "event" que main.js retransmite
+      // ao renderer. Reaproveitamos AGENT_MESSAGE_SENT (já existe, já é
+      // válido, e já é escutado pelo Orchestrator — então se o agente
+      // mencionar outro agente na resposta, o roteamento encadeia normalmente).
+      EventBus.emitEvent(EVENT_TYPES.AGENT_MESSAGE_SENT, {
+        messageId,
         from: agent.id,
-        fromName: agent.name,
+        to: null,
         content: response,
-        timestamp: Date.now()
+        mentions,
       });
 
       return response;
     } catch (error) {
       console.error(`[AgentManager] Agente ${agentId} travou no processamento:`, error);
-      
+
       agent.status = 'error';
       await AgentRepository.updateAgentStatus(agentId, 'error');
-      EventBus.emit(EVENT_TYPES.AGENT_UPDATED, { agentId, status: 'error' });
+      EventBus.emitEvent(EVENT_TYPES.AGENT_UPDATED, { agentId, status: 'error' });
+
+      // Sem isso, uma falha de runtime (CLI não instalada, servidor local
+      // fora do ar, etc.) travava o agente em silêncio: nenhum erro, nenhuma
+      // mensagem — exatamente o sintoma original. Agora a falha vira uma
+      // mensagem 'error' visível no próprio chat, pro usuário saber o que houve.
+      try {
+        const errorMessageId = generateId('msg');
+        const errorContent = `⚠️ ${agent.name} não conseguiu responder: ${error.message}`;
+
+        await run(
+          `INSERT INTO messages (id, conversation_id, from_agent, to_agent, content, mentions, type) VALUES (?, ?, ?, ?, ?, ?, 'error')`,
+          [errorMessageId, DEFAULT_CONVERSATION_ID, agent.id, null, errorContent, '[]']
+        );
+
+        EventBus.emitEvent(EVENT_TYPES.AGENT_MESSAGE_SENT, {
+          messageId: errorMessageId,
+          from: agent.id,
+          to: null,
+          content: errorContent,
+          mentions: [],
+        });
+      } catch (persistError) {
+        console.error(`[AgentManager] Falha ao persistir mensagem de erro do agente ${agentId}:`, persistError);
+      }
+
       throw error;
     }
   }
