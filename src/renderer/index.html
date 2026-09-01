@@ -259,6 +259,47 @@
       <div class="form-group"><label>Personalidade</label><textarea id="agent-personality" rows="3"></textarea></div>
       <div class="form-group"><label>Skills (vírgula)</label><input id="agent-skills" type="text" /></div>
       <div class="form-group checkbox"><input id="agent-is-ceo" type="checkbox" /><label>CEO</label></div>
+
+      <div class="avatar-builder">
+        <div class="avatar-builder-header">
+          <label class="avatar-builder-title">Aparência do boneco</label>
+          <button type="button" class="btn-secondary btn-small" id="btn-randomize-avatar">🎲 Build aleatória</button>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group"><label>Cor da pele</label><input id="agent-skin-color" type="color" value="#f1c27d" /></div>
+          <div class="form-group"><label>Cor do cabelo</label><input id="agent-hair-color" type="color" value="#2d1b0e" /></div>
+        </div>
+
+        <div class="form-group">
+          <label>Estilo de cabelo</label>
+          <select id="agent-hair-style">
+            <option value="bald">Careca</option>
+            <option value="short" selected>Curto</option>
+            <option value="long">Longo</option>
+            <option value="mohawk">Moicano</option>
+            <option value="bun">Coque</option>
+          </select>
+        </div>
+
+        <div class="form-group checkbox">
+          <input id="agent-furry" type="checkbox" />
+          <label>Furry (orelhas e rabo de animal)</label>
+        </div>
+
+        <div class="form-row avatar-furry-options hidden" id="agent-furry-options">
+          <div class="form-group">
+            <label>Espécie</label>
+            <select id="agent-fur-species">
+              <option value="fox">Raposa</option>
+              <option value="wolf">Lobo</option>
+              <option value="cat">Gato</option>
+              <option value="rabbit">Coelho</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Cor do pelo</label><input id="agent-fur-color" type="color" value="#d97706" /></div>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn-secondary modal-cancel">Cancelar</button>
