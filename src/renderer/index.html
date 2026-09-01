@@ -17,8 +17,8 @@
   <!-- SIDEBAR -->
   <aside class="sidebar glass">
     <div class="logo">
-      <span class="logo-mark">CL</span>
-      <span class="logo-text">CompanyLab</span>
+      <span class="logo-mark" id="app-logo-mark">CL</span>
+      <span class="logo-text" id="app-logo-text">CompanyLab</span>
     </div>
 
     <nav class="nav">
@@ -50,6 +50,10 @@
       <button class="nav-item" data-view="runtimes">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
         Runtimes
+      </button>
+      <button class="nav-item" data-view="settings">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Configurações
       </button>
     </nav>
 
@@ -192,6 +196,40 @@
       <div class="view view-panel" id="view-runtimes">
         <div class="view-header"><h2>Runtimes</h2></div>
         <div class="runtimes-list" id="runtimes-list"></div>
+      </div>
+
+      <!-- ── CONFIGURAÇÕES (personalização opcional da empresa) ── -->
+      <div class="view view-panel" id="view-settings">
+        <div class="view-header"><h2>Configurações</h2></div>
+        <div class="settings-panel">
+          <p class="settings-hint">Tudo aqui é opcional — sem preencher nada, o CompanyLab funciona normalmente com os valores padrão.</p>
+
+          <div class="form-group">
+            <label>Emoji / logo da empresa</label>
+            <input id="settings-emoji" type="text" maxlength="4" placeholder="🏢" />
+          </div>
+          <div class="form-group">
+            <label>Nome da empresa</label>
+            <input id="settings-name" type="text" placeholder="My Company" />
+          </div>
+          <div class="form-group">
+            <label>Slogan / tagline</label>
+            <input id="settings-tagline" type="text" placeholder="ex: Construindo o futuro, um agente por vez" />
+          </div>
+          <div class="form-group">
+            <label>Descrição</label>
+            <textarea id="settings-description" rows="3" placeholder="Do que essa empresa cuida?"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Cor de destaque</label>
+            <input id="settings-accent-color" type="color" value="#3b82f6" />
+          </div>
+
+          <div class="settings-actions">
+            <span class="settings-saved-msg" id="settings-saved-msg"></span>
+            <button class="btn-primary" id="btn-save-settings">Salvar</button>
+          </div>
+        </div>
       </div>
 
     </div><!-- /views-wrap -->
