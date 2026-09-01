@@ -456,6 +456,7 @@ class World {
           agentData: agent,
           worldPos:  worldPos.clone(),
           bobPhase:  Math.random() * Math.PI * 2,
+          rig: group.userData.rig || null, // { legL, legR, armL, armR, headGroup }
 
           // Estação de trabalho "de casa" — pra onde o agente sempre
           // volta depois de circular pelo escritório (seção "bonecos
@@ -486,131 +487,213 @@ class World {
       skinColor: cfg.skinColor || '#f1c27d',
       hairColor: cfg.hairColor || '#2d1b0e',
       hairStyle: cfg.hairStyle || 'short',
+      outfitColor: cfg.outfitColor || '#3b82f6',
       furry:     !!cfg.furry,
       furSpecies: cfg.furSpecies || 'fox',
       furColor:  cfg.furColor || '#d97706',
     };
   }
 
+  /** Escurece/clareia uma cor hex por um fator (-1..1) — usado pra derivar calça/sapato a partir da roupa. */
+  _shade(hexColor, amount) {
+    const c = new THREE.Color(hexColor);
+    if (amount < 0) c.multiplyScalar(1 + amount);
+    else c.lerp(new THREE.Color(0xffffff), amount);
+    return c;
+  }
+
+  /**
+   * Boneco 3D estilizado (não é mais um "peão de tabuleiro" cilindro+esfera):
+   * pernas e braços são grupos articulados (pivots nos quadris/ombros) pra
+   * dar ciclo de passada de verdade ao andar, gesto de digitação ao
+   * trabalhar, e um leve "olhar ao redor" quando ocioso — ver
+   * _updateAgentAnims. Cabeça é um Group próprio (headGroup) pra cabelo/
+   * orelhas/rabo furry acompanharem o giro da cabeça.
+   */
   _makeAgentMesh(agent) {
-    const color = STATUS_COLORS[agent.status] ?? STATUS_COLORS.idle;
+    const statusColor = STATUS_COLORS[agent.status] ?? STATUS_COLORS.idle;
     const av    = this._parseAvatarConfig(agent);
     const g     = new THREE.Group();
     g.userData.agentId = agent.id;
 
-    // Body — continua tingido pela cor de STATUS (é o indicador real de
-    // estado do agente, seção 26/38 do spec: nunca inventar/esconder
-    // status). A personalização de aparência (seção "bonecos genéricos")
-    // fica em cima disso: pele, cabelo e traços furry.
-    const body = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.24, 0.28, 1.15, 12),
-      new THREE.MeshStandardMaterial({
-        color, roughness: 0.45, metalness: 0.35,
-        emissive: color, emissiveIntensity: 0.12,
-      })
+    const outfitColor = av.outfitColor;
+    const pantsColor  = this._shade(outfitColor, -0.45);
+    const skinMat     = new THREE.MeshStandardMaterial({ color: av.skinColor, roughness: 0.7 });
+
+    const HIP_Y     = 0.5;
+    const TORSO_H   = 0.58;
+    const SHOULDER_Y = HIP_Y + TORSO_H;
+    const HEAD_R    = 0.2;
+    const HEAD_Y    = SHOULDER_Y + 0.08 + HEAD_R;
+
+    // ── Pernas — pivots no quadril pra poderem balançar ao caminhar ──
+    const legGeo = new THREE.BoxGeometry(0.13, 0.5, 0.15);
+    const legMat = new THREE.MeshStandardMaterial({ color: pantsColor, roughness: 0.6 });
+
+    const makeLimbPivot = (x, y, mesh, meshOffsetY) => {
+      const pivot = new THREE.Group();
+      pivot.position.set(x, y, 0);
+      mesh.position.y = meshOffsetY;
+      mesh.castShadow = true;
+      pivot.add(mesh);
+      g.add(pivot);
+      return pivot;
+    };
+
+    const legL = makeLimbPivot(-0.1, HIP_Y, new THREE.Mesh(legGeo, legMat), -0.25);
+    const legR = makeLimbPivot(0.1, HIP_Y, new THREE.Mesh(legGeo, legMat), -0.25);
+
+    // Sapatos
+    const shoeGeo = new THREE.BoxGeometry(0.15, 0.08, 0.2);
+    const shoeMat = new THREE.MeshStandardMaterial({ color: 0x1c1917, roughness: 0.5 });
+    const shoeL = new THREE.Mesh(shoeGeo, shoeMat);
+    shoeL.position.set(0, -0.5, 0.03);
+    legL.children[0].add(shoeL);
+    const shoeR = new THREE.Mesh(shoeGeo, shoeMat);
+    shoeR.position.set(0, -0.5, 0.03);
+    legR.children[0].add(shoeR);
+
+    // ── Tronco ──
+    const torso = new THREE.Mesh(
+      new THREE.BoxGeometry(0.4, TORSO_H, 0.22),
+      new THREE.MeshStandardMaterial({ color: outfitColor, roughness: 0.5, metalness: 0.08 })
     );
-    body.position.y = 0.58;
-    body.castShadow = true;
-    g.add(body);
+    torso.position.y = HIP_Y + TORSO_H / 2;
+    torso.castShadow = true;
+    g.add(torso);
 
-    // Head — cor de pele customizável
-    const head = new THREE.Mesh(
-      new THREE.SphereGeometry(0.22, 14, 10),
-      new THREE.MeshStandardMaterial({ color: av.skinColor, roughness: 0.75 })
-    );
-    head.position.y = 1.4;
-    head.castShadow = true;
-    g.add(head);
+    // ── Braços — pivots no ombro ──
+    const armGeo = new THREE.BoxGeometry(0.1, 0.3, 0.12);
+    const armMat = new THREE.MeshStandardMaterial({ color: outfitColor, roughness: 0.5 });
+    const handGeo = new THREE.SphereGeometry(0.06, 8, 8);
 
-    this._addHair(g, av);
-    if (av.furry) this._addFurryFeatures(g, av);
+    const makeArm = (x) => {
+      const pivot = new THREE.Group();
+      pivot.position.set(x, SHOULDER_Y - 0.03, 0);
+      const upper = new THREE.Mesh(armGeo, armMat);
+      upper.position.y = -0.15;
+      upper.castShadow = true;
+      pivot.add(upper);
+      const hand = new THREE.Mesh(handGeo, skinMat);
+      hand.position.y = -0.33;
+      pivot.add(hand);
+      g.add(pivot);
+      return pivot;
+    };
+    const armL = makeArm(-0.26);
+    const armR = makeArm(0.26);
 
-    // Shadow disc
+    // ── Cabeça (Group independente — gira sozinha pra "olhar ao redor") ──
+    const headGroup = new THREE.Group();
+    headGroup.position.y = HEAD_Y;
+    g.add(headGroup);
+
+    const headMesh = new THREE.Mesh(new THREE.SphereGeometry(HEAD_R, 16, 12), skinMat);
+    headMesh.castShadow = true;
+    headGroup.add(headMesh);
+
+    // Olhinhos — é o detalhe que faz parecer um personagem, não um pino
+    const eyeGeo = new THREE.SphereGeometry(0.022, 8, 8);
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x14161a });
+    const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+    eyeL.position.set(-0.075, 0.01, HEAD_R - 0.03);
+    headGroup.add(eyeL);
+    const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+    eyeR.position.set(0.075, 0.01, HEAD_R - 0.03);
+    headGroup.add(eyeR);
+
+    this._addHair(headGroup, av, HEAD_R);
+    if (av.furry) this._addFurryFeatures(headGroup, g, av, HEAD_R, HIP_Y);
+
+    // Sombra no chão
     const shadow = new THREE.Mesh(
-      new THREE.CircleGeometry(0.3, 16),
-      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3 })
+      new THREE.CircleGeometry(0.32, 16),
+      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28 })
     );
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.01;
     g.add(shadow);
 
-    // Working pulse ring
-    if (agent.status === 'working') {
-      const ring = new THREE.Mesh(
-        new THREE.RingGeometry(0.34, 0.42, 24),
-        new THREE.MeshBasicMaterial({
-          color, transparent: true, opacity: 0.75,
-          side: THREE.DoubleSide,
-        })
-      );
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.y = 0.03;
-      ring.userData.isPulse = true;
-      g.add(ring);
-    }
+    // ── Anel de status no chão — sinaliza o estado REAL do agente sem
+    // depender da cor da roupa (que agora é 100% customizável pelo
+    // usuário). Continua vindo só de `agent.status`, nunca inventado
+    // (seção 26/38 do spec: status é sempre real).
+    const statusRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.34, 0.42, 24),
+      new THREE.MeshStandardMaterial({
+        color: statusColor, emissive: statusColor,
+        emissiveIntensity: agent.status === 'working' ? 0.85 : 0.45,
+        transparent: true, opacity: agent.status === 'working' ? 0.85 : 0.55,
+        side: THREE.DoubleSide,
+      })
+    );
+    statusRing.rotation.x = -Math.PI / 2;
+    statusRing.position.y = 0.015;
+    if (agent.status === 'working') statusRing.userData.isPulse = true;
+    g.add(statusRing);
+
+    // Guarda as referências do "esqueleto" pra animação (caminhada, digitar, olhar ao redor)
+    g.userData.rig = { legL, legR, armL, armR, headGroup };
 
     return g;
   }
 
   /** Adiciona cabelo na cabeça, no estilo escolhido (seção "bonecos genéricos"). */
-  _addHair(g, av) {
+  _addHair(headGroup, av, headR) {
     if (av.hairStyle === 'bald') return;
 
     const hairMat = new THREE.MeshStandardMaterial({ color: av.hairColor, roughness: 0.8 });
 
     if (av.hairStyle === 'short' || av.hairStyle === 'bun') {
-      // Touca curta cobrindo o topo da cabeça
-      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.225, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMat);
-      cap.position.y = 1.42;
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(headR * 1.03, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMat);
       cap.castShadow = true;
-      g.add(cap);
+      headGroup.add(cap);
 
       if (av.hairStyle === 'bun') {
-        const bun = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), hairMat);
-        bun.position.set(0, 1.62, -0.14);
-        g.add(bun);
+        const bun = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), hairMat);
+        bun.position.set(0, headR * 0.8, -headR * 0.7);
+        headGroup.add(bun);
       }
     } else if (av.hairStyle === 'long') {
-      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.225, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMat);
-      cap.position.y = 1.42;
-      g.add(cap);
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(headR * 1.03, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMat);
+      headGroup.add(cap);
 
       // Mecha longa caindo atrás da cabeça
-      const strand = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.1, 0.42, 10), hairMat);
-      strand.position.set(0, 1.22, -0.14);
+      const strand = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.09, 0.4, 10), hairMat);
+      strand.position.set(0, -0.18, -headR * 0.6);
       strand.castShadow = true;
-      g.add(strand);
+      headGroup.add(strand);
     } else if (av.hairStyle === 'mohawk') {
-      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.16, 0.32), hairMat);
-      strip.position.y = 1.58;
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.16, 0.3), hairMat);
+      strip.position.y = headR * 0.9;
       strip.castShadow = true;
-      g.add(strip);
+      headGroup.add(strip);
     }
   }
 
-  /** Adiciona orelhas + rabo de animal quando o agente é "furry" (pedido do usuário). */
-  _addFurryFeatures(g, av) {
+  /** Adiciona orelhas (na cabeça) + rabo de animal (no quadril) quando o agente é "furry". */
+  _addFurryFeatures(headGroup, g, av, headR, hipY) {
     const furMat = new THREE.MeshStandardMaterial({ color: av.furColor, roughness: 0.9 });
     const earGeo = av.furSpecies === 'cat' || av.furSpecies === 'fox'
-      ? new THREE.ConeGeometry(0.06, 0.14, 8)
-      : new THREE.SphereGeometry(0.07, 8, 8); // wolf/rabbit: orelhas mais arredondadas/compridas
+      ? new THREE.ConeGeometry(0.055, 0.13, 8)
+      : new THREE.SphereGeometry(0.065, 8, 8); // wolf/rabbit: orelhas mais arredondadas/compridas
 
     const earL = new THREE.Mesh(earGeo, furMat);
     const earR = new THREE.Mesh(earGeo, furMat);
-    const earY = av.furSpecies === 'rabbit' ? 1.66 : 1.56;
-    earL.position.set(-0.14, earY, -0.02);
-    earR.position.set(0.14, earY, -0.02);
+    const earY = av.furSpecies === 'rabbit' ? headR * 1.3 : headR * 0.85;
+    earL.position.set(-0.13, earY, -0.02);
+    earR.position.set(0.13, earY, -0.02);
     if (av.furSpecies === 'rabbit') {
       earL.scale.set(0.6, 2.2, 0.6);
       earR.scale.set(0.6, 2.2, 0.6);
     }
     earL.castShadow = earR.castShadow = true;
-    g.add(earL, earR);
+    headGroup.add(earL, earR);
 
-    // Rabo, saindo da base das costas do corpo
-    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.34, 8), furMat);
-    tail.position.set(0, 0.35, -0.26);
-    tail.rotation.x = Math.PI * 0.65;
+    // Rabo, saindo da base das costas (quadril) — fica no corpo, não na cabeça
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.32, 8), furMat);
+    tail.position.set(0, hipY - 0.05, -0.24);
+    tail.rotation.x = Math.PI * 0.6;
     tail.castShadow = true;
     g.add(tail);
   }
@@ -883,10 +966,50 @@ class World {
     }
   }
 
+  /**
+   * Anima o "esqueleto" de cada agente — é o que dá a liberdade real de
+   * "andar pela empresa e fazer outras coisas" (pedido do usuário) vida
+   * visual: ciclo de passada ao caminhar entre salas, gesto de digitação
+   * enquanto o status real é 'working', e um leve olhar ao redor quando
+   * está ocioso na própria mesa.
+   */
   _updateAgentAnims(t) {
     this.agentObjs.forEach(ao => {
-      const bob = Math.sin(t * 1.3 + ao.bobPhase) * 0.045;
+      const walking = ao.wander?.state === 'walking';
+      const bobAmt  = walking ? 0.018 : 0.045;
+      const bobFreq = walking ? 5.2 : 1.3;
+      const bob = Math.sin(t * bobFreq + ao.bobPhase) * bobAmt;
       ao.group.position.y = ao.worldPos.y + bob;
+
+      const rig = ao.rig;
+      if (rig) {
+        if (walking) {
+          const stride = Math.sin(t * 7 + ao.bobPhase);
+          if (rig.legL) rig.legL.rotation.x = stride * 0.55;
+          if (rig.legR) rig.legR.rotation.x = -stride * 0.55;
+          if (rig.armL) rig.armL.rotation.x = -stride * 0.4;
+          if (rig.armR) rig.armR.rotation.x = stride * 0.4;
+          if (rig.headGroup) rig.headGroup.rotation.y *= 0.9; // olha pra frente enquanto anda
+        } else {
+          // Volta as pernas/braços suavemente pra posição neutra
+          if (rig.legL) rig.legL.rotation.x *= 0.85;
+          if (rig.legR) rig.legR.rotation.x *= 0.85;
+
+          if (ao.agentData?.status === 'working') {
+            // Gesto de "digitando" — só aparece quando o status REAL é
+            // 'working' (nunca fabricado, ver comentário no status ring).
+            const type = Math.sin(t * 9 + ao.bobPhase) * 0.16;
+            if (rig.armL) rig.armL.rotation.x = -0.85 + type;
+            if (rig.armR) rig.armR.rotation.x = -0.85 - type;
+            if (rig.headGroup) rig.headGroup.rotation.y *= 0.9;
+          } else {
+            if (rig.armL) rig.armL.rotation.x *= 0.88;
+            if (rig.armR) rig.armR.rotation.x *= 0.88;
+            // Olhar ao redor devagar — só quando parado e não trabalhando
+            if (rig.headGroup) rig.headGroup.rotation.y = Math.sin(t * 0.35 + ao.bobPhase) * 0.4;
+          }
+        }
+      }
 
       ao.group.children.forEach(c => {
         if (!c.userData.isPulse) return;
