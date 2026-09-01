@@ -253,6 +253,7 @@ class World {
     if (dist > OVERVIEW_MAX_DIST) {
       this.camera.position.setLength(OVERVIEW_MAX_DIST);
     }
+  }
 
   _tryInteract() {
     if (this.gazedAgent) {
