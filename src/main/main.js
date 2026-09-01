@@ -18,6 +18,7 @@ const { app, ipcMain } = require("electron");
 const { initDatabase, closeDatabase } = require("../../backend/database/db");
 const AgentManager = require("../../agents/AgentManager");
 const Orchestrator = require("../../core/orchestrator/Orchestrator");
+const runtimeSessionManager = require("../../backend/runtimes/runtimeSessionManager");
 const { createMainWindow } = require("./windows/mainWindow");
 const EventBus = require("../../core/events/EventBus");
 
@@ -100,8 +101,13 @@ app.on("window-all-closed", () => {
   }
 });
 
-// 4. Shutdown limpo - fecha a conexao SQLite antes do processo morrer.
+// 4. Shutdown limpo - fecha a conexao SQLite antes do processo morrer,
+//    e derruba qualquer processo de runtime (ex: 'opencode serve') que
+//    tenha sido subido escondido, pra nao deixar orfao no Windows/Linux.
 app.on("before-quit", async () => {
+  await runtimeSessionManager.disposeAll().catch((err) => {
+    console.error("[main.js] Erro ao encerrar sessões de runtime:", err);
+  });
   await closeDatabase().catch((err) => {
     console.error("[main.js] Erro ao fechar o banco:", err);
   });
