@@ -343,6 +343,15 @@ body {
 }
 .btn-secondary { background: rgba(255,255,255,0.06); color: var(--tx1); }
 .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+.btn-danger {
+  background: rgba(239,68,68,0.12); color: #fca5a5;
+  border: 1px solid rgba(239,68,68,0.35);
+  padding: 7px 16px; border-radius: 8px;
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-danger:hover { background: rgba(239,68,68,0.22); color: #fecaca; }
+.ap-dismiss { width: 100%; margin-top: 14px; }
 
 /* ── Dashboard ───────────────────────────────────────── */
 .stats-row {
@@ -432,6 +441,16 @@ body {
 .agent-card-name { font-weight: 600; font-size: 14px; }
 .agent-card-role { color: var(--tx2); font-size: 12px; }
 .agent-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.agent-card-footer { margin-top: 12px; display: flex; justify-content: flex-end; }
+.agent-card-dismiss {
+  background: transparent; color: var(--tx3);
+  border: 1px solid var(--border); border-radius: 7px;
+  padding: 4px 10px; font-size: 11px; cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.agent-card-dismiss:hover {
+  background: rgba(239,68,68,0.14); color: #fca5a5; border-color: rgba(239,68,68,0.4);
+}
 .tag {
   background: rgba(255,255,255,0.05);
   border: 1px solid var(--border);
