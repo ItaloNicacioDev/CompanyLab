@@ -40,6 +40,18 @@ function getGLTFLoaderModule() {
   return gltfLoaderModulePromise;
 }
 
+let skeletonUtilsModulePromise = null;
+function getSkeletonUtilsModule() {
+  // Object3D.clone() comum NÃO duplica esqueleto corretamente em modelos
+  // rigged/animados (SkinnedMesh) — todos os clones acabariam compartilhando
+  // os MESMOS ossos, e animar um agente moveria todos ao mesmo tempo.
+  // SkeletonUtils.clone() é o jeito certo de clonar um modelo com esqueleto.
+  if (!skeletonUtilsModulePromise) {
+    skeletonUtilsModulePromise = import('three/examples/jsm/utils/SkeletonUtils.js');
+  }
+  return skeletonUtilsModulePromise;
+}
+
 /**
  * Carrega (e cacheia) um .glb de assets/agents/models. Retorna null se não
  * existir/der erro — nunca lança. Normaliza escala e posição: qualquer
@@ -592,11 +604,12 @@ class World {
    */
   async _tryAttachRealModel(group, av) {
     const fileName = this._modelFileFor(av);
-    const template = await loadAgentModel(fileName);
-    if (!template) return;          // arquivo não existe ainda -> segue procedural
+    const loaded = await loadAgentModel(fileName);
+    if (!loaded) return;            // arquivo não existe ainda -> segue procedural
     if (!group.parent) return;      // agente já foi removido/repopulado nesse meio-tempo
 
-    const model = template.clone(true);
+    const { SkeletonUtils } = await getSkeletonUtilsModule();
+    const model = SkeletonUtils.clone(loaded.root);
     model.traverse(child => {
       if (!child.isMesh) return;
       child.castShadow = true;
@@ -617,6 +630,22 @@ class World {
     model.userData.isRealModel = true;
     group.add(model);
     group.userData.modelRoot = model;
+
+    // Animação: toca automaticamente se o .glb tiver clipes embutidos.
+    // Convenção: clipe chamado "Walk" toca enquanto o agente anda; o
+    // primeiro clipe "parado" que achar (Idle/Survey/Standing, ou
+    // simplesmente o primeiro da lista) toca o resto do tempo.
+    if (loaded.clips.length) {
+      const mixer = new THREE.AnimationMixer(model);
+      const byName = (re) => loaded.clips.find(c => re.test(c.name || ''));
+      const walkClip = byName(/walk/i);
+      const idleClip = byName(/idle|survey|stand/i) || loaded.clips[0];
+      group.userData.mixer = mixer;
+      group.userData.idleAction = idleClip ? mixer.clipAction(idleClip) : null;
+      group.userData.walkAction = walkClip ? mixer.clipAction(walkClip) : null;
+      group.userData.currentAction = group.userData.idleAction || group.userData.walkAction || null;
+      if (group.userData.currentAction) group.userData.currentAction.play();
+    }
   }
 
   /**
@@ -953,7 +982,7 @@ class World {
     this._updateRoomState();
     this._updateGaze(dt);
     this._updateAgentMovement(t, dt);
-    this._updateAgentAnims(t);
+    this._updateAgentAnims(t, dt);
     this._updateHTMLLabels();
 
     this.renderer.render(this.scene, this.camera);
@@ -1187,12 +1216,33 @@ class World {
    * enquanto o status real é 'working', e um leve olhar ao redor quando
    * está ocioso na própria mesa.
    */
-  _updateAgentAnims(t) {
+  _updateAgentAnims(t, dt) {
     this.agentObjs.forEach(ao => {
       const walking = ao.wander?.state === 'walking';
+
+      // Se o agente tem um modelo 3D real carregado (com animação
+      // embutida no .glb), toca o clipe certo nele em vez de mexer no
+      // rig procedural (que fica escondido nesse caso).
+      const g = ao.group;
+      if (g.userData.mixer) {
+        g.userData.mixer.update(dt);
+        const wantWalk = walking && g.userData.walkAction;
+        const wantAction = wantWalk ? g.userData.walkAction : (g.userData.idleAction || g.userData.walkAction);
+        if (wantAction && g.userData.currentAction !== wantAction) {
+          const prev = g.userData.currentAction;
+          wantAction.reset().fadeIn(0.25).play();
+          if (prev) prev.fadeOut(0.25);
+          g.userData.currentAction = wantAction;
+        }
+      }
+
+      const hasRealAnim = !!g.userData.mixer;
       const bobAmt  = walking ? 0.018 : 0.045;
       const bobFreq = walking ? 5.2 : 1.3;
-      const bob = Math.sin(t * bobFreq + ao.bobPhase) * bobAmt;
+      // Modelo real com clipe de animação embutido já tem seu próprio
+      // "balanço" natural ao andar — não soma o bob procedural em cima
+      // pra não ficar um duplo solavanco estranho.
+      const bob = hasRealAnim ? 0 : Math.sin(t * bobFreq + ao.bobPhase) * bobAmt;
       ao.group.position.y = ao.worldPos.y + bob;
 
       const rig = ao.rig;
