@@ -2,7 +2,7 @@
  * renderer.js
  *
  * Controller da UI do CompanyLab.
- * Usa window.ipc() do preload.js e window.World do world.js.
+ * Usa window.ipc() do preload.js e window.World2D do world2d.js.
  */
 
 'use strict';
