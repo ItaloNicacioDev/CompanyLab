@@ -329,24 +329,17 @@
    // Agent status update (called from handleCompanyEvent / IPC)
    // -----------------------------------------------------------------
 
-   setAgentStatus(agentId, status) {
-     const agentObj = this.agentObjs.find(a => a.agentData.id === agentId);
-     if (!agentObj) return;
+setAgentStatus(agentId, status) {
+      const agentObj = this.agentObjs.find(a => a.agentData.id === agentId);
+      if (!agentObj) return;
 
-     agentObj.status = status;
+      agentObj.status = status;
+      this._markForRedraw();
+    }
 
-     // Update visual - change sprite color/appearance
-     this._updateAgentVisual(agentObj);
-   }
-
-   _updateAgentVisual(agentObj) {
-     const statusColor = STATUS_COLORS[agentObj.status] || STATUS_COLORS.idle;
-     const el = document.getElementById('agent-sprite-' + agentObj.agentData.id);
-     if (el) {
-       el.style.fill = statusColor;
-       el.style.stroke = statusColor;
-     }
-   }
+    _markForRedraw() {
+      this.needsRedraw = true;
+    }
 
    // -----------------------------------------------------------------
    // Main animation loop
