@@ -52,6 +52,23 @@ class CompanyLabUI {
       if (evt.type === 'agent.updated' && this.currentView === 'agents') {
         this._loadAgents();
       }
+
+      // Atualizar status visual do agente no mundo 2D
+      const statusMap = {
+        'agent.working': 'working',
+        'agent.idle': 'idle',
+        'agent.blocked': 'blocked',
+        'agent.error': 'error',
+        'agent.meeting.started': 'meeting',
+        'agent.meeting.ended': 'idle',
+        'agent.message.sent': 'communicating',
+        'agent.task.started': 'working',
+        'agent.task.completed': 'completed',
+      };
+      const statusKey = statusMap[evt.type];
+      if (statusKey && this.world) {
+        this.world.setAgentStatus(evt.payload.agentId, statusKey);
+      }
     });
   }
 
@@ -59,16 +76,17 @@ class CompanyLabUI {
 
   _initWorld() {
     const container = document.getElementById('world-canvas');
-    if (!window.World || !container) return;
+    if (!window.World2D || !container) return;
 
-    this.world = new window.World(container, {
+    this.world = new window.World2D(container, {
       onPointerLock: (locked) => {
-        // Sidebar + topbar fade in FPS mode
+        // 2D Office: update UI state when "entering"/interacting
         document.getElementById('app').classList.toggle('app-locked', locked);
 
-        // Show/hide UI overlays
+        // Show/hide UI overlays (2D doesn't have crosshair/prompt in same way)
         document.getElementById('world-start').style.display = locked ? 'none' : 'flex';
-        document.getElementById('crosshair').style.display   = locked ? 'flex' : 'none';
+        // No crosshair in 2D mode
+        document.getElementById('crosshair').style.display = 'none';
         if (!locked) document.getElementById('world-prompt').classList.add('hidden');
       },
 
@@ -92,7 +110,7 @@ class CompanyLabUI {
 
       onRoomExit: () => {
         if (this.currentView === 'office') {
-          document.getElementById('current-view').textContent = '3D Office';
+          document.getElementById('current-view').textContent = '2D Office';
         }
         this._hideAgentPanel();
       },

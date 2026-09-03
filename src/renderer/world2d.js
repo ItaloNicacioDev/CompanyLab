@@ -475,4 +475,5 @@
    }
  }
 
- module.exports = { World2D };
+ window.World2D = World2D;
+module.exports = { World2D };
