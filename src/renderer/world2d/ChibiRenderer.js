@@ -109,8 +109,12 @@
     ctx.fillStyle = '#26211c';
     roundRect(ctx, -6.5 + legSwing * 0.3, 12, 6, 3.4, 1.6);
     ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
     roundRect(ctx, 0.5 - legSwing * 0.3, 12, 6, 3.4, 1.6);
     ctx.fill();
+    ctx.stroke();
 
     // ── cauda (furry) — desenhada atrás do corpo ────────────────
     if (isFurry) {
@@ -137,6 +141,9 @@
     ctx.fillStyle = outfit;
     roundRect(ctx, -7.5, -6, 15, 12, 5);
     ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(15,23,42,0.55)';
+    ctx.stroke();
     // colarinho/detalhe
     ctx.fillStyle = shade(outfit, 0.25);
     roundRect(ctx, -7.5, -6, 15, 3.5, 3);
@@ -196,6 +203,9 @@
     ctx.beginPath();
     ctx.arc(0, 0, 9.5, 0, Math.PI * 2);
     ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(15,23,42,0.5)';
+    ctx.stroke();
 
     // focinho leve (furry) / nariz humano
     if (isFurry) {
