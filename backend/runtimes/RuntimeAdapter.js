@@ -124,6 +124,12 @@ class RuntimeAdapter {
   spawnHidden(command, args = [], options = {}) {
     const child = spawn(command, args, {
       windowsHide: true, // <- impede a janela de console de aparecer no Windows
+      // CLIs instaladas via `npm install -g` no Windows viram um shim
+      // .cmd/.bat, não um .exe — sem `shell: true`, o spawn às vezes não
+      // resolve/roda esse .cmd direito (ou os args não chegam certos no
+      // processo real por trás dele). No terminal, o cmd.exe já faz essa
+      // resolução por você; aqui a gente precisa pedir isso explicitamente.
+      shell: process.platform === "win32",
       stdio: ["ignore", "pipe", "pipe"], // stdin ignorado, stdout/stderr CAPTURADOS (nunca herdados)
       ...options,
       env: { ...process.env, PATH: ENHANCED_PATH, ...(options.env || {}) },
@@ -151,6 +157,14 @@ class RuntimeAdapter {
     return new Promise((resolve, reject) => {
       const child = spawn(command, args, {
         windowsHide: true,
+        // NOTA: aqui NÃO usamos shell:true (diferente do spawnHidden acima)
+        // — este método roda com argumentos de conteúdo ARBITRÁRIO (a
+        // mensagem do usuário, virando `-p "<mensagem>"` pro Claude
+        // Code/Codex). Com shell:true no Windows, aspas/&/|/^ na mensagem
+        // quebrariam o parsing do cmd.exe. Sem shell, o Node passa cada
+        // item do array como argv real, sem re-interpretação — mais
+        // lento de resolver .cmd/.bat em alguns casos, mas correto e
+        // seguro pra texto livre.
         stdio: ["ignore", "pipe", "pipe"],
         ...spawnOptions,
         env: { ...process.env, PATH: ENHANCED_PATH, ...(spawnOptions.env || {}) },
