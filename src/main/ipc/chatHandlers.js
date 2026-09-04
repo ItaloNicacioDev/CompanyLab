@@ -108,3 +108,12 @@ function registerChatHandlers(ipcMain) {
 }
 
 module.exports = registerChatHandlers;
+// `AgentManager.js` (agents/AgentManager.js) importa extractMentions e
+// DEFAULT_CONVERSATION_ID a partir deste módulo via destructuring —
+// como module.exports acima é a própria função (não um objeto), esses
+// dois precisam ser anexados como propriedades dela, senão chegam como
+// `undefined` no outro lado e o processamento de mensagem do agente
+// quebra bem na hora de persistir a resposta (era o motivo real do
+// "@agente não responde no chat").
+module.exports.extractMentions = extractMentions;
+module.exports.DEFAULT_CONVERSATION_ID = DEFAULT_CONVERSATION_ID;
