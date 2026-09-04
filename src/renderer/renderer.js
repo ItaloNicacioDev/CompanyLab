@@ -72,7 +72,7 @@ class CompanyLabUI {
     });
   }
 
-  // ─── 3D World ─────────────────────────────────────────────────────────────
+  // ─── 2D World ─────────────────────────────────────────────────────────────
 
   _initWorld() {
     const container = document.getElementById('world-canvas');
@@ -150,7 +150,7 @@ class CompanyLabUI {
     if (viewEl) viewEl.classList.add('active');
 
     const labels = {
-      office:'3D Office', dashboard:'Dashboard', agents:'Agentes',
+      office:'Office', dashboard:'Dashboard', agents:'Agentes',
       departments:'Departamentos', tasks:'Tarefas', chat:'Chat', runtimes:'Runtimes',
       settings:'Configurações',
     };
@@ -218,7 +218,7 @@ class CompanyLabUI {
     // Agent panel close
     document.getElementById('agent-panel-close')?.addEventListener('click', () => this._hideAgentPanel());
 
-    // Demitir — pelo painel do boneco selecionado no escritório 3D
+    // Demitir — pelo painel do boneco selecionado no escritório 2D
     document.getElementById('btn-ap-dismiss')?.addEventListener('click', () => {
       this._dismissAgent(this._currentPanelAgentId, this._currentPanelAgentName);
     });
@@ -233,10 +233,10 @@ class CompanyLabUI {
       this._dismissAgent(btn.dataset.dismissId, agent?.name);
     });
 
-    // World start overlay — click to lock
+    // World start overlay — dispensa a dica de controles e ativa a interação
+    // com o escritório 2D (sem Pointer Lock — seção 17/33 do spec de migração).
     document.getElementById('world-start').addEventListener('click', () => {
-      const canvas = document.querySelector('#world-canvas canvas');
-      if (canvas) canvas.requestPointerLock();
+      if (this.world) this.world.requestEnter();
     });
   }
 
@@ -331,7 +331,7 @@ class CompanyLabUI {
    * Demite (exclui) um funcionário. Pedido do usuário: "quero também a
    * opção de excluir (demitir o funcionário)". O backend (agent:delete)
    * já existia pronto; isso aqui é a ponta de UI, chamada tanto pelo botão
-   * no card da lista de Agentes quanto pelo painel do boneco no escritório 3D.
+   * no card da lista de Agentes quanto pelo painel do boneco no escritório 2D.
    */
   async _dismissAgent(agentId, agentName) {
     if (!agentId) return;
@@ -345,7 +345,7 @@ class CompanyLabUI {
       return;
     }
 
-    // Some o boneco do escritório 3D e atualiza a lista/painel
+    // Some o boneco do escritório 2D e atualiza a lista/painel
     this._hideAgentPanel();
     if (this.currentView === 'agents') this._loadAgents();
     this._loadWorldData();
@@ -532,7 +532,7 @@ class CompanyLabUI {
     if (result.success) {
       this._hideModal();
       this._loadAgents();
-      this._loadWorldData(); // refresh 3D world
+      this._loadWorldData(); // refresh 2D world
     }
   }
 
@@ -589,7 +589,7 @@ class CompanyLabUI {
     if (result.success) {
       this._hideModal();
       this._loadDepartments();
-      this._loadWorldData(); // refresh 3D world
+      this._loadWorldData(); // refresh 2D world
     }
   }
 }
