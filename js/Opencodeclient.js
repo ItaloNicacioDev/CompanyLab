@@ -1,161 +1,150 @@
 /**
- * openCodeClient.js
+ * OpenCodeAdapter.js
  *
- * Fala com o servidor HTTP REAL do OpenCode (iniciado com `opencode serve`).
- * Não simula nada: cria sessões de verdade e manda mensagens de verdade
- * para o backend do OpenCode.
- *
- * IMPORTANTE: os nomes exatos de rota (/session, /session/:id/message, etc.)
- * seguem o formato documentado publicamente do OpenCode server. Se a sua
- * versão instalada expuser rotas ligeiramente diferentes, rode:
- *
- *    opencode serve
- *
- * e depois abra no navegador:
- *
- *    http://localhost:4096/doc
- *
- * (o OpenCode expõe um OpenAPI/Swagger automático). Ajuste as constantes
- * ROUTES abaixo se necessário — é só isso que muda.
+ * Sobe `opencode serve` ESCONDIDO (sem janela de terminal, via
+ * spawnHidden do RuntimeAdapter) na primeira vez que for preciso, e
+ * fala com ele via HTTP usando o OpenCodeClient que já existia em
+ * js/Opencodeclient.js. O usuário nunca vê nem precisa tocar em nada
+ * disso — o processo sobe e morre junto com o CompanyLab.
  */
 
-const fetch = global.fetch || require("node-fetch");
+const { RuntimeAdapter, buildSystemPromptFromAgentConfig } = require("../RuntimeAdapter");
+const { OpenCodeClient } = require("../../../js/Opencodeclient");
 
-const ROUTES = {
-  createSession: () => `/session`,
-  sendMessage: (sessionId) => `/session/${sessionId}/message`,
-  getSession: (sessionId) => `/session/${sessionId}`,
-  // O OpenCode mudou a rota de health entre versões (`/global/health` nas
-  // versões mais antigas, `/api/health` na v2) — tentamos as duas em vez
-  // de travar a detecção inteira numa rota específica de versão.
-  health: ["/global/health", "/api/health", "/health"],
-};
+const DEFAULT_PORT = 4096;
+const SERVER_READY_TIMEOUT_MS = 25000;
+const SERVER_READY_POLL_INTERVAL_MS = 300;
 
-class OpenCodeClient {
-  constructor(baseUrl) {
-    this.baseUrl = baseUrl.replace(/\/$/, "");
-    this._healthRoute = null; // cacheia qual rota funcionou, pra não tentar tudo de novo toda hora
-  }
-
-  async checkHealth() {
-    const routesToTry = this._healthRoute ? [this._healthRoute] : ROUTES.health;
-    for (const route of routesToTry) {
-      try {
-        const res = await fetch(this.baseUrl + route);
-        if (res.ok) {
-          this._healthRoute = route;
-          return true;
-        }
-      } catch {
-        // tenta a próxima rota candidata
-      }
-    }
-    return false;
-  }
-
+class OpenCodeAdapter extends RuntimeAdapter {
   /**
-   * Cria uma sessão nova no OpenCode para um agente específico.
-   * O systemPrompt/persona é enviado como a primeira mensagem "de sistema"
-   * (na prática, como uma mensagem de setup) para fixar a personalidade
-   * daquele agente durante toda a sessão.
+   * @param {object} [options]
+   * @param {string} [options.cliCommand='opencode']
+   * @param {number} [options.port=4096]
    */
-  async createSession(title) {
-    const res = await fetch(this.baseUrl + ROUTES.createSession(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
-    });
-    if (!res.ok) {
-      throw new Error(
-        `Falha ao criar sessão no OpenCode (HTTP ${res.status}). ` +
-          `Confirme que 'opencode serve' está rodando em ${this.baseUrl}.`
-      );
-    }
-    const data = await res.json();
-    return data.id || data.sessionID || data.session_id;
+  constructor({ cliCommand = "opencode", port = DEFAULT_PORT } = {}) {
+    super("OpenCode");
+    this.cliCommand = cliCommand;
+    this.port = port;
+    this.baseUrl = `http://localhost:${port}`;
+    this.client = new OpenCodeClient(this.baseUrl);
+
+    this._serverProcess = null;
+    this._serverReadyPromise = null;
   }
 
-  /**
-   * Manda uma mensagem para uma sessão e devolve o texto final da resposta.
-   * O OpenCode faz streaming (SSE) da resposta; aqui concatenamos os
-   * pedaços de texto até o evento de finalização.
-   */
-  async sendMessage(sessionId, text) {
-    const res = await fetch(this.baseUrl + ROUTES.sendMessage(sessionId), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        parts: [{ type: "text", text }],
-      }),
-    });
-
-    if (!res.ok) {
-      throw new Error(
-        `Falha ao enviar mensagem para sessão ${sessionId} (HTTP ${res.status}).`
-      );
-    }
-
-    const contentType = res.headers.get("content-type") || "";
-
-    // Caso a resposta venha como JSON simples (não-streaming)
-    if (contentType.includes("application/json")) {
-      const data = await res.json();
-      return extractTextFromResponse(data);
-    }
-
-    // Caso venha como SSE (text/event-stream), concatena os deltas de texto
-    if (contentType.includes("text/event-stream")) {
-      return await readSSEText(res);
-    }
-
-    // Fallback: tenta ler como texto puro
-    const raw = await res.text();
+  async isAvailable() {
+    if (await this.client.checkHealth()) return true;
     try {
-      return extractTextFromResponse(JSON.parse(raw));
-    } catch {
-      return raw;
+      await this._ensureServerRunning();
+      return await this.client.checkHealth();
+    } catch (err) {
+      // Guarda o motivo real (timeout, ENOENT, porta ocupada, etc.) pra
+      // quem chamou (RuntimeSessionManager) poder mostrar no chat em vez
+      // de um "não disponível" genérico sem pista nenhuma.
+      this.lastError = err.message;
+      return false;
+    }
+  }
+
+  /**
+   * Garante que `opencode serve` está rodando, subindo escondido se
+   * necessário. Idempotente: chamadas concorrentes reaproveitam a
+   * mesma subida em vez de tentar subir o servidor várias vezes.
+   */
+  async _ensureServerRunning() {
+    if (await this.client.checkHealth()) return; // já tem um rodando (de uma sessão anterior, por exemplo)
+    if (this._serverReadyPromise) return this._serverReadyPromise;
+
+    // Construído com `new Promise(...)` de propósito (em vez de uma IIFE
+    // async) — assim os listeners de evento do processo ('error'/'exit')
+    // conseguem chamar reject() diretamente. Deixar um listener de
+    // evento dar `throw` não é capturado por nenhum try/catch externo e
+    // derruba o processo inteiro (bug real encontrado ao testar sem o
+    // binário 'opencode' instalado).
+    this._serverReadyPromise = new Promise((resolve, reject) => {
+      let settled = false;
+      let stderrBuf = "";
+
+      this._serverProcess = this.spawnHidden(this.cliCommand, ["serve", "--port", String(this.port)]);
+      this._serverProcess.stderr?.on("data", (chunk) => {
+        stderrBuf += chunk.toString();
+      });
+
+      this._serverProcess.on("exit", (code) => {
+        this._log(`[OpenCode] processo 'opencode serve' encerrou (code ${code}).`);
+        this._serverProcess = null;
+        if (!settled) {
+          settled = true;
+          this._serverReadyPromise = null;
+          const detail = stderrBuf.trim() ? ` stderr: ${stderrBuf.trim().slice(-400)}` : "";
+          reject(new Error(`[OpenCode] 'opencode serve' encerrou antes de ficar pronto (code ${code}).${detail}`));
+        } else {
+          this._serverReadyPromise = null;
+        }
+      });
+
+      this._serverProcess.on("error", (err) => {
+        if (!settled) {
+          settled = true;
+          this._serverReadyPromise = null;
+          reject(new Error(`[OpenCode] Falha ao iniciar 'opencode serve': ${err.message}`));
+        }
+      });
+
+      const start = Date.now();
+      const poll = async () => {
+        if (settled) return;
+        if (await this.client.checkHealth()) {
+          settled = true;
+          resolve();
+          return;
+        }
+        if (Date.now() - start >= SERVER_READY_TIMEOUT_MS) {
+          settled = true;
+          this._serverReadyPromise = null;
+          reject(
+            new Error(`[OpenCode] 'opencode serve' não respondeu em ${this.baseUrl} depois de ${SERVER_READY_TIMEOUT_MS}ms.`)
+          );
+          return;
+        }
+        setTimeout(poll, SERVER_READY_POLL_INTERVAL_MS);
+      };
+      poll();
+    });
+
+    return this._serverReadyPromise;
+  }
+
+  /** @param {object} agentConfig @returns {Promise<string>} */
+  async createSession(agentConfig = {}) {
+    await this._ensureServerRunning();
+
+    const title = agentConfig.name ? `CompanyLab - ${agentConfig.name}` : "CompanyLab session";
+    const sessionId = await this.client.createSession(title);
+
+    // Fixa a identidade do agente (soul.md/personalidade/cargo) como a
+    // primeira mensagem da sessão, antes de qualquer coisa do usuário.
+    const systemPrompt = buildSystemPromptFromAgentConfig(agentConfig);
+    if (systemPrompt) {
+      await this.client.sendMessage(sessionId, systemPrompt);
+    }
+
+    return sessionId;
+  }
+
+  /** @param {string} sessionId @param {string} message @returns {Promise<string>} */
+  async sendMessage(sessionId, message) {
+    await this._ensureServerRunning();
+    return this.client.sendMessage(sessionId, message);
+  }
+
+  async dispose() {
+    if (this._serverProcess) {
+      this._serverProcess.kill();
+      this._serverProcess = null;
+      this._serverReadyPromise = null;
     }
   }
 }
 
-function extractTextFromResponse(data) {
-  // Formatos comuns: { parts: [{type:'text', text: '...'}] } ou { text: '...' }
-  if (typeof data === "string") return data;
-  if (data.text) return data.text;
-  if (Array.isArray(data.parts)) {
-    return data.parts
-      .filter((p) => p.type === "text")
-      .map((p) => p.text)
-      .join("");
-  }
-  if (data.message && data.message.parts) {
-    return data.message.parts
-      .filter((p) => p.type === "text")
-      .map((p) => p.text)
-      .join("");
-  }
-  return JSON.stringify(data);
-}
-
-async function readSSEText(res) {
-  let full = "";
-  const decoder = new TextDecoder();
-  for await (const chunk of res.body) {
-    const str = decoder.decode(chunk, { stream: true });
-    for (const line of str.split("\n")) {
-      if (!line.startsWith("data:")) continue;
-      const payload = line.slice(5).trim();
-      if (!payload || payload === "[DONE]") continue;
-      try {
-        const evt = JSON.parse(payload);
-        if (evt.type === "text-delta" && evt.text) full += evt.text;
-        else if (evt.text) full += evt.text;
-      } catch {
-        // ignora linhas que não são JSON válido
-      }
-    }
-  }
-  return full;
-}
-
-module.exports = { OpenCodeClient };
+module.exports = { OpenCodeAdapter };
