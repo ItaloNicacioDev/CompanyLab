@@ -236,4 +236,4 @@ function buildPromptWithHistory(session, newMessage, maxTurns = 6) {
   return `Contexto da conversa até agora:\n${context}\n\nNova mensagem: ${newMessage}`;
 }
 
-module.exports = { RuntimeAdapter, buildSystemPromptFromAgentConfig, buildPromptWithHistory };
+module.exports = { RuntimeAdapter, buildSystemPromptFromAgentConfig, buildPromptWithHistory, buildEnhancedPath, ENHANCED_PATH };
