@@ -1,472 +1,264 @@
 /**
- * world2d.js — CompanyLab 2D World Engine
- * 
- * Migração do mundo 3D para 2D Canvas.
- * Mantém API pública idêntica ao World 3D:
- *   - new World2D(container, callbacks)
- *   - world2d.populate(departments, agents)
- *   - world2d.setPassive(value)
- *   - world2d.requestEnter()
- *   - world2d.destroy()
- * 
- * Visuais:
- * - Renderização Canvas 2D
- * - Salas como retângulos 2D com decoração
- * - Agentes como sprites 2D coloridos com indicação de status
- * - Câmera top-down com pan e zoom
- * - Clique/hover em agente dispara callbacks
+ * World2D.js
+ *
+ * Motor visual 2D do escritório do CompanyLab — substitui o antigo
+ * mundo Three.js/FPS por um Canvas 2D top-down com sprites (seção 1 a
+ * 42 do spec de migração). API pública preservada de propósito, pra
+ * `renderer.js` não precisar mudar:
+ *
+ *   new World2D(container, callbacks)
+ *   world.populate(departments, agents)
+ *   world.setPassive(value)
+ *   world.requestEnter()
+ *   world.setAgentStatus(agentId, status)
+ *   world.destroy()
+ *
+ * Callbacks aceitos (mesmos nomes de antes):
+ *   onAgentSelect(agent) · onPointerLock(locked) · onRoomEnter(deptName)
+ *   onRoomExit() · onPrompt(text|null)
+ *
+ * Nada aqui inventa atividade dos agentes: o único estado "de
+ * apresentação" autônomo é o wandering (ver AgentSprite/_updateWander),
+ * que nunca sobrescreve `agent.status` — ele só decide se o boneco
+ * fica andando por perto enquanto está ocioso (seção 35 do spec).
  */
 
- 'use strict';
+'use strict';
 
- const STATUS_COLORS = {
-   idle:    '#64748b',
-   working: '#22c55e',
-   communicating: '#3b82f6',
-   meeting: '#8b5cf6',
-   waiting: '#f59e0b',
-   blocked: '#ef4444',
-   error:   '#dc2626',
-   completed: '#06b6d4',
- };
+(function (root) {
+  const NS = (root.CompanyLabWorld2D = root.CompanyLabWorld2D || {});
 
- const DEPT_COLORS = [
-   '#3b82f6', // development - blue
-   '#8b5cf6', // marketing - purple
-   '#22c55e', // finance - green
-   '#f59e0b', // generic - amber
-   '#ef4444', // error - red
-   '#06b6d4', // completed - cyan
-   '#ec4899', // pink
-   '#84cc16', // lime
- ];
+  class World2D {
+    constructor(container, cb = {}) {
+      this.container = container;
+      this.cb = cb || {};
 
- /**
-  * @param {HTMLElement} container
-  * @param {{onAgentSelect, onPointerLock, onRoomEnter, onRoomExit, onPrompt}} cb
-  */
- class World2D {
-   constructor(container, cb = {}) {
-     this.container = container;
-     this.cb = cb;
-     this.departments = [];
-     this.agents = [];
-     this.rooms = [];
-     this.agentObjs = [];
-     this.labelLayer = null;
+      this.departments = [];
+      this.agents = [];
+      this.rooms = [];
+      this.hub = null;
 
-     // 2D camera state
-     this.camera = { x: 0, y: 0, scale: 1 };
+      this.isPassive = false;
+      this.currentRoom = null;
+      this.selectedSprite = null;
+      this._hoveredSprite = null;
 
-     // Interaction state
-     this.isLocked = false;
-     this.keys = {};
-     this.gazedAgent = null;
-     this.gazeTimer = 0;
-     this.currentRoom = null;
-     this.nearRoom = null;
-     this._promptCurrent = null;
+      this.assetManager = new NS.AssetManager('assets/');
+      this.roomRenderer = new NS.RoomRenderer();
+      this.spriteManager = new NS.SpriteManager();
+      this.camera = new NS.Camera2D();
 
-     // Three.js references kept for compatibility (but not used for rendering)
-     this.scene = null;
-     this.camera3d = null;
-     this.renderer3d = null;
+      this._initCanvas();
+      this.interaction = new NS.InteractionManager(this.canvas, this.camera, this);
+      this.animation = new NS.AnimationController(this);
+      this.animation.start();
 
-     this._initCanvas();
-     this._initEventListeners();
-     this._animate();
-   }
-
-   _initCanvas() {
-     // Clear container and create 2D canvas
-     this.container.innerHTML = '';
-
-     this.canvas = document.createElement('canvas');
-     this.canvas.style.cssText = 'position: fixed; inset: 0; display: block;';
-     this.container.appendChild(this.canvas);
-
-     this.ctx = this.canvas.getContext('2d');
-     this._resizeCanvas();
-
-     window.addEventListener('resize', () => this._resizeCanvas());
-   }
-
-   _resizeCanvas() {
-     const rect = this.container.getBoundingClientRect();
-     this.canvas.width = rect.width;
-     this.canvas.height = rect.height;
-   }
-
-   _initEventListeners() {
-     // Click on canvas for interaction
-     this.canvas.addEventListener('click', (e) => this._onCanvasClick(e));
-     this.canvas.addEventListener('mousemove', (e) => this._onCanvasMove(e));
-     this.canvas.addEventListener('mouseleave', () => this._onCanvasLeave());
-
-     // Pointer lock / FPS mode compatibility
-     this.canvas.addEventListener('pointerlockchange', () => {
-       this.isLocked = document.pointerLockElement === this.canvas;
-       this.cb.onPointerLock?.(this.isLocked);
-     });
-
-     this.canvas.addEventListener('click', () => {
-       if (!this.isLocked) this.canvas.requestPointerLock();
-     });
-   }
-
-   _onCanvasClick(e) {
-     const rect = this.canvas.getBoundingClientRect();
-     const x = e.clientX - rect.left;
-     const y = e.clientY - rect.top;
-
-     // Convert canvas coordinates to world coordinates considering camera
-     const wx = (x - this.canvas.width / 2) / (this.canvas.width / 2) * this.camera.scale + this.camera.x;
-     const wy = (this.canvas.height / 2 - y) / (this.canvas.height / 2) * this.camera.scale + this.camera.y;
-
-     // Check if clicked on an agent
-     const agent = this._pointInAgent(wx, wy);
-     if (agent) {
-       this.cb.onAgentSelect?.(agent);
-       return;
-     }
-
-     // Check if clicked on a room
-     const room = this._pointInRoom(wx, wy);
-     if (room) {
-       this.cb.onRoomEnter?.(room);
-       return;
-     }
-
-     // Hide prompt if clicking elsewhere
-     this._setPrompt(null);
-   }
-
-   _onCanvasMove(e) {
-     const rect = this.canvas.getBoundingClientRect();
-     const x = e.clientX - rect.left;
-     const y = e.clientY - rect.top;
-
-     // Check for agent hover
-     const agent = this._pointInAgent(
-       (x - this.canvas.width / 2) / (this.canvas.width / 2) * this.camera.scale + this.camera.x,
-       (this.canvas.height / 2 - y) / (this.canvas.height / 2) * this.camera.scale + this.camera.y
-     );
-
-     if (agent) {
-       this.gazedAgent = agent;
-       this.gazeTimer += 16 / 1000; // approx delta
-       if (this.gazeTimer >= 0.5) {
-         this.cb.onPrompt?.('[E] Ver ' + agent.name);
-       }
-     } else {
-       if (this.gazedAgent) {
-         this.gazedAgent = null;
-         this.gazeTimer = 0;
-         this._setPrompt(this.nearRoom ? '[E] Entrar em ' + this.nearRoom : null);
-       }
-     }
-   }
-
-   _onCanvasLeave() {
-     this.gazedAgent = null;
-     this.gazeTimer = 0;
-     this._setPrompt(this.nearRoom ? '[E] Entrar em ' + this.nearRoom : null);
-   }
-
-   _pointInAgent(wx, wy) {
-     for (const ao of this.agentObjs) {
-       // Simple point-in-rectangle check for agent visual
-       const bounds = ao.spriteBounds;
-       if (bounds && wx >= bounds.x && wx <= bounds.x + bounds.width && wy >= bounds.y && wy <= bounds.y + bounds.height) {
-         return ao.agentData;
-       }
-     }
-     return null;
-   }
-
-   _pointInRoom(wx, wy) {
-     for (const room of this.rooms) {
-       // Check if world coords are within room bounds
-       const roomPos = room.position || { x: 0, y: 0 };
-       const footprint = room.userData?.footprint;
-       if (footprint) {
-         if (wx >= roomPos.x - footprint.width / 2 && wx <= roomPos.x + footprint.width / 2 &&
-             wy >= roomPos.y - footprint.depth / 2 && wy <= roomPos.y + footprint.depth / 2) {
-           return room;
-         }
-       }
-     }
-     return null;
-   }
-
-   _setPrompt(text) {
-     const el = document.getElementById('world-prompt');
-     if (text) {
-       el.textContent = text;
-       el.classList.remove('hidden');
-     } else {
-       el.classList.add('hidden');
-     }
-     this._promptCurrent = text;
-   }
-
-   // =========================================================
-   // Populate: build rooms and agents from department/agent data
-   // =========================================================
-
-   populate(departments, agents) {
-     this.departments = departments || [];
-     this.agents = agents || [];
-
-     // Build rooms
-     this.rooms = [];
-     this._buildRooms();
-
-     // Build agents
-     this.agentObjs = [];
-     this._buildAgents();
-
-     this._animate();
-   }
-
-   _buildRooms() {
-     const n = this.departments.length;
-     if (n === 0) return;
-
-     this.departments.forEach((dept, i) => {
-       const color = DEPT_COLORS[i % DEPT_COLORS.length];
-       const accentColor = dept.accentColor || color;
-
-       // Compute room position (arranged horizontally)
-       const roomWidth = (dept.userData?.footprint?.width || 200) + 20;
-       const roomHeight = (dept.userData?.footprint?.depth || 150) + 20;
-       const x = i * (roomWidth + 20) - (n * roomWidth) / 2 + roomWidth / 2;
-       const y = 0;
-
-       const room = {
-         deptId: dept.id,
-         deptName: dept.name,
-         color,
-         position: { x, y },
-         footprint: { width: roomWidth, depth: roomHeight },
-         userData: {
-           departmentId: dept.id,
-           departmentName: dept.name,
-           accentColor,
-         },
-       };
-
-       this.rooms.push(room);
-     });
-
-     // Reset prompt state
-     this._setPrompt(null);
-   }
-
-   _buildAgents() {
-     // Group agents by department
-     const byDept = {};
-     this.agents.forEach(a => {
-       const key = a.departmentId || '__none__';
-       (byDept[key] = byDept[key] || []).push(a);
-     });
-
-     // Position rooms and agents
-     this.rooms.forEach((room) => {
-       const dept = this.departments.find(d => d.id === room.deptId);
-       const agentsInDept = byDept[room.deptId] || [];
-
-       // Simple horizontal positioning within room
-       const slotWidth = room.footprint.width / Math.max(agentsInDept.length, 1);
-       agentsInDept.forEach((agent, i) => {
-         const x = room.position.x + (i - (agentsInDept.length - 1) / 2) * slotWidth;
-         const y = room.position.y + 30; // slightly inside room
-
-         const agentObj = {
-           agentData: agent,
-           spriteBounds: { x, y, width: 20, height: 30 },
-           status: agent.status || 'idle',
-         };
-
-         this.agentObjs.push(agentObj);
-       });
-     });
-
-     this._animate();
-   }
-
-   // =========================================================
-   // Status management
-   // =========================================================
-
-   setPassive(value) {
-     this._isPassive = !!value;
-     // Update UI class if needed
-     const app = document.getElementById('app');
-     if (app) {
-       app.classList.toggle('app-passive', value);
-     }
-     this.cb.onPointerLock?.(value ? false : true);
-   }
-
-   requestEnter() {
-     // In 2D, "enter" just means exiting passive mode and enabling interaction
-     this.setPassive(false);
-     this.isLocked = true;
-     this.cb.onPointerLock?.(true);
-
-     // Hide the start overlay
-     const worldStart = document.getElementById('world-start');
-     const crosshair = document.getElementById('crosshair');
-     if (worldStart) worldStart.style.display = 'none';
-     if (crosshair) crosshair.style.display = 'flex';
-
-     // Show prompt area can still receive events
-     this._setPrompt(null);
-   }
-
-   // -----------------------------------------------------------------
-   // Agent status update (called from handleCompanyEvent / IPC)
-   // -----------------------------------------------------------------
-
-setAgentStatus(agentId, status) {
-      const agentObj = this.agentObjs.find(a => a.agentData.id === agentId);
-      if (!agentObj) return;
-
-      agentObj.status = status;
-      this._markForRedraw();
+      // Pré-carrega assets reais (se existirem em disco). Não bloqueia —
+      // enquanto isso o fallback chibi é usado normalmente.
+      this._preloadKnownAssets();
     }
 
-    _markForRedraw() {
-      this.needsRedraw = true;
+    // ────────────────────────────────────────────────────────────
+    // Setup
+    // ────────────────────────────────────────────────────────────
+
+    _initCanvas() {
+      this.container.innerHTML = '';
+      this.canvas = document.createElement('canvas');
+      this.canvas.style.cssText = 'position:fixed;inset:0;display:block;';
+      this.container.appendChild(this.canvas);
+      this.ctx = this.canvas.getContext('2d');
+      this._resize();
+      window.addEventListener('resize', this._onResize = () => this._resize());
     }
 
-   // -----------------------------------------------------------------
-   // Main animation loop
-   // -----------------------------------------------------------------
+    _resize() {
+      const rect = this.container.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      this.canvas.width = Math.max(1, Math.round(rect.width * dpr));
+      this.canvas.height = Math.max(1, Math.round(rect.height * dpr));
+      this.canvas.style.width = rect.width + 'px';
+      this.canvas.style.height = rect.height + 'px';
+      this._dpr = dpr;
+    }
 
-   _animate() {
-     this._raf = requestAnimationFrame(() => this._animate());
-     this._render();
-   }
+    _preloadKnownAssets() {
+      const species = ['fox', 'wolf', 'cat', 'rabbit'];
+      const frames = ['idle', 'walk_down', 'walk_up', 'walk_left', 'walk_right', 'work'];
+      const entries = [];
+      frames.forEach((f) => entries.push({ key: `agents/sprites/human/${f}`, path: `agents/sprites/human/${f}.png` }));
+      species.forEach((sp) => {
+        frames.forEach((f) => entries.push({ key: `agents/sprites/furry/${sp}/${f}`, path: `agents/sprites/furry/${sp}/${f}.png` }));
+      });
+      this.assetManager.preload(entries);
+    }
 
-   _render() {
-     // Clear canvas
-     this.ctx.fillStyle = '#0b1120';
-     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    // ────────────────────────────────────────────────────────────
+    // API pública compatível
+    // ────────────────────────────────────────────────────────────
 
-     // Draw rooms
-     this._drawRooms();
+    populate(departments, agents) {
+      this.departments = departments || [];
+      this.agents = agents || [];
 
-     // Draw agents
-     this._drawAgents();
+      const { rooms, hub, bounds } = NS.gridLayout.computeLayout(this.departments);
+      this.rooms = rooms;
+      this.hub = hub;
 
-     // Draw UI prompts (already handled by DOM)
-   }
+      // Slots de workstation por sala (recalculado a cada populate, já
+      // que employeeCount pode ter mudado).
+      this.rooms.forEach((room) => {
+        room.workstations = this.roomRenderer.layoutWorkstations(room);
+      });
 
-   _drawRooms() {
-     this.ctx.save();
-     this.ctx.translate(this.canvas.width / 2, this.canvas.height / 2);
-     this.ctx.scale(this.camera.scale, this.camera.scale);
-     this.ctx.translate(-this.canvas.width / 2, -this.canvas.height / 2);
+      const byDept = new Map();
+      this.agents.forEach((agent) => {
+        const key = agent.departmentId || '__none__';
+        if (!byDept.has(key)) byDept.set(key, []);
+        byDept.get(key).push(agent);
+      });
 
-     this.rooms.forEach((room) => {
-       const pos = room.position;
-       const footprint = room.footprint;
+      const slotIndexByDept = new Map();
+      const homeForAgent = (agent) => {
+        const room = this.rooms.find((r) => r.id === agent.departmentId);
+        if (!room || !room.workstations.length) {
+          return { x: this.hub.x + this.hub.width / 2, y: this.hub.y + this.hub.height / 2 };
+        }
+        const i = slotIndexByDept.get(agent.departmentId) || 0;
+        slotIndexByDept.set(agent.departmentId, i + 1);
+        return room.workstations[i % room.workstations.length];
+      };
+      const roomForAgent = (agent) => this.rooms.find((r) => r.id === agent.departmentId) || null;
 
-       // Draw room floor
-       this.ctx.fillStyle = room.color;
-       this.ctx.fillRect(pos.x - footprint.width / 2, pos.y - footprint.depth / 2, footprint.width, footprint.depth);
+      this.spriteManager.sync(this.agents, homeForAgent, roomForAgent);
 
-       // Draw room border/accent
-       this.ctx.strokeStyle = room.userData?.accentColor || '#64748b';
-       this.ctx.lineWidth = 2;
-       this.ctx.strokeRect(pos.x - footprint.width / 2, pos.y - footprint.depth / 2, footprint.width, footprint.depth);
+      this.camera.setBounds(bounds);
+      if (!this._everPopulated) {
+        this._everPopulated = true;
+        this._fitOverview(true);
+      }
+    }
 
-       // Draw department name
-       this.ctx.fillStyle = '#e2e8f0';
-       this.ctx.font = 'bold 14px Inter, system-ui, sans-serif';
-       this.ctx.textAlign = 'center';
-       this.ctx.fillText(room.deptName, pos.x, pos.y - footprint.depth / 2 - 10);
-     });
+    _fitOverview(instant) {
+      const b = this.camera.bounds;
+      if (!b) return;
+      const cx = (b.minX + b.maxX) / 2;
+      const cy = (b.minY + b.maxY) / 2;
+      const w = (b.maxX - b.minX) || 800;
+      const h = (b.maxY - b.minY) || 600;
+      const rect = this.container.getBoundingClientRect();
+      const zoom = Math.min(this.camera.maxZoom, Math.max(this.camera.minZoom,
+        Math.min((rect.width || 1200) / w, (rect.height || 800) / h) * 0.92));
+      if (instant) {
+        this.camera.x = cx; this.camera.y = cy; this.camera.zoom = zoom;
+      } else {
+        this.camera.flyTo(cx, cy, zoom, 0.6);
+      }
+    }
 
-     this.ctx.restore();
-   }
+    setPassive(value) {
+      this.isPassive = !!value;
+      const app = document.getElementById('app');
+      if (app) app.classList.toggle('app-passive', this.isPassive);
+      this.cb.onPointerLock?.(!this.isPassive);
+    }
 
-   _drawAgents() {
-     this.ctx.save();
-     this.ctx.translate(this.canvas.width / 2, this.canvas.height / 2);
-     this.ctx.scale(this.camera.scale, this.camera.scale);
-     this.ctx.translate(-this.canvas.width / 2, -this.canvas.height / 2);
+    requestEnter() {
+      this.setPassive(false);
+      this.cb.onPointerLock?.(true);
+      this.cb.onPrompt?.(null);
+    }
 
-     this.agentObjs.forEach((ao) => {
-       const { agentData, spriteBounds, status } = ao;
-       const statusColor = STATUS_COLORS[status] || STATUS_COLORS.idle;
+    setAgentStatus(agentId, status) {
+      this.spriteManager.setAgentSpriteStatus(agentId, status);
+    }
 
-       // Draw agent sprite (colored rectangle with status color)
-       const x = spriteBounds.x;
-       const y = spriteBounds.y;
-       const w = spriteBounds.width;
-       const h = spriteBounds.height;
+    moveAgentSpriteTo(agentId, x, y) {
+      this.spriteManager.moveAgentSpriteTo(agentId, x, y);
+    }
 
-       // Body color based on department/avatar config
-       const avatarConfig = this._parseAvatarConfig(agentData);
-       const bodyColor = avatarConfig.outfitColor || statusColor;
+    destroy() {
+      this.animation?.stop();
+      this.interaction?.destroy();
+      if (this._onResize) window.removeEventListener('resize', this._onResize);
+      if (this.canvas && this.canvas.parentNode) this.canvas.parentNode.removeChild(this.canvas);
+    }
 
-       // Draw agent rectangle
-       this.ctx.fillStyle = bodyColor;
-       this.ctx.fillRect(x, y, w, h);
+    // ────────────────────────────────────────────────────────────
+    // Interação de alto nível (chamado pelo InteractionManager)
+    // ────────────────────────────────────────────────────────────
 
-       // Draw status ring/outline
-       this.ctx.fillStyle = statusColor;
-       this.ctx.globalAlpha = 0.5;
-       this.ctx.fillRect(x + 2, y + 2, w - 4, h / 3);
-       this.ctx.globalAlpha = 1.0;
+    selectSprite(sprite) {
+      if (this.selectedSprite && this.selectedSprite !== sprite) this.selectedSprite.selected = false;
+      this.selectedSprite = sprite;
+      if (sprite) sprite.selected = true;
+    }
 
-       // Draw name
-       this.ctx.fillStyle = '#ffffff';
-       this.ctx.font = '10px Inter, system-ui, sans-serif';
-       this.ctx.textAlign = 'center';
-       this.ctx.fillText(agentData.name || '—', x + w / 2, y + h + 14);
+    enterRoom(room) {
+      this.currentRoom = room;
+      this.camera.focusOnRoom(room, this.canvas.width / this._dpr, this.canvas.height / this._dpr);
+      this.cb.onRoomEnter?.(room.name);
+    }
 
-       // Draw status label
-       this.ctx.fillStyle = '#ffffff';
-       this.ctx.font = 'bold 10px Inter, system-ui, sans-serif';
-       this.ctx.textAlign = 'center';
-       this.ctx.fillText(status, x + w / 2, y + h + 28);
-     });
+    exitRoom() {
+      const wasSelected = this.selectedSprite;
+      if (wasSelected) { wasSelected.selected = false; this.selectedSprite = null; }
+      if (!this.currentRoom) return;
+      this.currentRoom = null;
+      this._fitOverview(false);
+      this.cb.onRoomExit?.();
+    }
 
-     this.ctx.restore();
-   }
+    // ────────────────────────────────────────────────────────────
+    // Render
+    // ────────────────────────────────────────────────────────────
 
-   _parseAvatarConfig(agent) {
-     let cfg = {};
-     if (agent.avatar) {
-       try { cfg = JSON.parse(agent.avatar); } catch { cfg = {}; }
-     }
-     return {
-       skinColor: cfg.skinColor || '#f1c27d',
-       hairColor: cfg.hairColor || '#2d1b0e',
-       hairStyle: cfg.hairStyle || 'short',
-       outfitColor: cfg.outfitColor || '#3b82f6',
-       furry: !!cfg.furry,
-       furSpecies: cfg.furSpecies || 'fox',
-       furColor: cfg.furColor || '#d97706',
-     };
-   }
+    render() {
+      const ctx = this.ctx;
+      const w = this.canvas.width, h = this.canvas.height;
 
-   // =========================================================
-   // Destroy / cleanup
-   // =========================================================
+      ctx.save();
+      ctx.scale(this._dpr, this._dpr);
+      const cw = w / this._dpr, ch = h / this._dpr;
 
-   destroy() {
-     if (this._raf) cancelAnimationFrame(this._raf);
-     if (this.canvas && this.canvas.parentNode) {
-       this.canvas.parentNode.removeChild(this.canvas);
-     }
-     window.removeEventListener('resize', this._resizeCanvas);
-   }
- }
+      ctx.fillStyle = '#0b1120';
+      ctx.fillRect(0, 0, cw, ch);
 
- window.World2D = World2D;
-module.exports = { World2D };
+      ctx.save();
+      this.camera.applyTransform(ctx, cw, ch);
+
+      this._drawBackgroundGrid(ctx);
+
+      if (this.hub) this.roomRenderer.drawHub(ctx, this.hub);
+      this.rooms.forEach((room, i) => this.roomRenderer.draw(ctx, room, i));
+
+      const sprites = this.spriteManager.all().sort((a, b) => a.y - b.y);
+      sprites.forEach((s) => s.draw(ctx, this.assetManager));
+
+      ctx.restore();
+      ctx.restore();
+    }
+
+    _drawBackgroundGrid(ctx) {
+      const b = this.camera.bounds;
+      if (!b) return;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(148,163,184,0.05)';
+      ctx.lineWidth = 1;
+      const step = 80;
+      const pad = 400;
+      for (let x = b.minX - pad; x <= b.maxX + pad; x += step) {
+        ctx.beginPath(); ctx.moveTo(x, b.minY - pad); ctx.lineTo(x, b.maxY + pad); ctx.stroke();
+      }
+      for (let y = b.minY - pad; y <= b.maxY + pad; y += step) {
+        ctx.beginPath(); ctx.moveTo(b.minX - pad, y); ctx.lineTo(b.maxX + pad, y); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  NS.World2D = World2D;
+  // Compatibilidade: renderer.js instancia via window.World2D (seção 26 do spec).
+  root.World2D = World2D;
+  if (typeof module !== 'undefined' && module.exports) module.exports = { World2D };
+})(typeof window !== 'undefined' ? window : globalThis);
