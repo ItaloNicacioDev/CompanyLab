@@ -11,7 +11,7 @@
 <!-- ══════════════════════════════════════════ SHELL ══ -->
 <div id="app">
 
-  <!-- CANVAS 3D — preenche a tela atrás de tudo (Three.js renderiza aqui) -->
+  <!-- CANVAS 2D — preenche a tela atrás de tudo (Canvas 2D top-down renderiza aqui) -->
   <div id="world-canvas"></div>
 
   <!-- SIDEBAR -->
@@ -24,7 +24,7 @@
     <nav class="nav">
       <button class="nav-item active" data-view="office">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-        3D Office
+        Office
       </button>
       <button class="nav-item" data-view="dashboard">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
@@ -68,32 +68,33 @@
 
     <!-- TOP BAR -->
     <header class="topbar glass">
-      <span class="breadcrumb" id="current-view">3D Office</span>
+      <span class="breadcrumb" id="current-view">Office</span>
       <div class="topbar-actions" id="topbar-actions"></div>
     </header>
 
     <!-- VIEWS -->
     <div class="views-wrap">
 
-      <!-- ── 3D OFFICE ─────────────────────────────── -->
+      <!-- ── OFFICE (2D) ──────────────────────────────── -->
       <div class="view view-office active" id="view-office">
 
-        <!-- Enter-to-explore overlay (shown when pointer NOT locked) -->
+        <!-- Overlay de boas-vindas / controles do escritório 2D (dispensa ao clicar) -->
         <div class="world-start-overlay" id="world-start">
           <div class="wso-inner">
             <div class="wso-icon">⊹</div>
             <div class="wso-title">Explorar Escritório</div>
             <div class="wso-keys">
-              <span class="wso-key">Click</span> entrar
-              <span class="wso-key">WASD</span> mover
-              <span class="wso-key">E</span> interagir
-              <span class="wso-key">Shift</span> correr
-              <span class="wso-key">ESC</span> sair
+              <span class="wso-key">Click</span> ver agente / entrar na sala
+              <span class="wso-key">Arrastar</span> mover câmera
+              <span class="wso-key">Scroll</span> zoom
+              <span class="wso-key">WASD</span> mover câmera
+              <span class="wso-key">ESC</span> voltar à visão geral
             </div>
           </div>
         </div>
 
-        <!-- Crosshair (shown when pointer locked) -->
+        <!-- Elemento legado do modo FPS (Pointer Lock) — sem uso na experiência 2D,
+             mantido escondido no DOM apenas por compatibilidade (seção 33 do spec). -->
         <div class="crosshair hidden" id="crosshair">
           <div class="ch-dot"></div>
           <div class="ch-h"></div>
@@ -103,7 +104,7 @@
         <!-- Interaction prompt: "[E] Entrar em Dev" -->
         <div class="world-prompt hidden" id="world-prompt"></div>
 
-        <!-- Agent detail panel (overlay on 3D) -->
+        <!-- Agent detail panel (overlay on the 2D office canvas) -->
         <div class="agent-panel glass hidden" id="agent-panel">
           <button class="agent-panel-close" id="agent-panel-close">✕</button>
           <div class="agent-panel-header">
@@ -306,7 +307,7 @@
           <div class="form-group"><label>Cor do pelo</label><input id="agent-fur-color" type="color" value="#d97706" /></div>
         </div>
 
-        <div class="avatar-preview-hint">O boneco 3D é montado com essas cores/estilo assim que você criar o agente — dá pra ver no escritório.</div>
+        <div class="avatar-preview-hint">O personagem 2D é montado com essas cores/estilo assim que você criar o agente — dá pra ver no escritório.</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -339,9 +340,21 @@
 
 </div><!-- /modal-overlay -->
 
-<!-- Scripts: Three.js via npm (require) is loaded inside world.js itself -->
-<script src="world.js"></script>
-<script src="world2d.js"></script>
+<!-- Scripts: motor visual 2D (Canvas, sem Three.js) — ordem importa, cada
+     módulo se registra em window.CompanyLabWorld2D antes do World2D.js
+     amarrar tudo. world.js (Three.js/3D, legado) não é mais carregado;
+     o arquivo continua no repo até a migração ser validada em produção
+     (seção 42 do spec de migração). -->
+<script src="world2d/AssetManager.js"></script>
+<script src="world2d/ChibiRenderer.js"></script>
+<script src="world2d/AgentSprite.js"></script>
+<script src="world2d/SpriteManager.js"></script>
+<script src="world2d/Camera2D.js"></script>
+<script src="world2d/layout/gridLayout.js"></script>
+<script src="world2d/RoomRenderer.js"></script>
+<script src="world2d/InteractionManager.js"></script>
+<script src="world2d/AnimationController.js"></script>
+<script src="world2d/World2D.js"></script>
 <script src="renderer.js"></script>
 
 </body>
