@@ -25,21 +25,32 @@ const ROUTES = {
   createSession: () => `/session`,
   sendMessage: (sessionId) => `/session/${sessionId}/message`,
   getSession: (sessionId) => `/session/${sessionId}`,
-  health: () => `/global/health`,
+  // O OpenCode mudou a rota de health entre versões (`/global/health` nas
+  // versões mais antigas, `/api/health` na v2) — tentamos as duas em vez
+  // de travar a detecção inteira numa rota específica de versão.
+  health: ["/global/health", "/api/health", "/health"],
 };
 
 class OpenCodeClient {
   constructor(baseUrl) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
+    this._healthRoute = null; // cacheia qual rota funcionou, pra não tentar tudo de novo toda hora
   }
 
   async checkHealth() {
-    try {
-      const res = await fetch(this.baseUrl + ROUTES.health());
-      return res.ok;
-    } catch (err) {
-      return false;
+    const routesToTry = this._healthRoute ? [this._healthRoute] : ROUTES.health;
+    for (const route of routesToTry) {
+      try {
+        const res = await fetch(this.baseUrl + route);
+        if (res.ok) {
+          this._healthRoute = route;
+          return true;
+        }
+      } catch {
+        // tenta a próxima rota candidata
+      }
     }
+    return false;
   }
 
   /**
