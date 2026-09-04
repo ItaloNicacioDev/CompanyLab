@@ -14,6 +14,8 @@ const { generateId } = require("../../../backend/utils/id.js");
 const { getDefaultCompanyId } = require("../../../backend/database/defaultCompany");
 const EventBus = require("../../../core/events/EventBus");
 const { EVENT_TYPES } = require("../../../core/events/eventTypes");
+const AgentManager = require("../../../agents/AgentManager");
+const runtimeSessionManager = require("../../../backend/runtimes/runtimeSessionManager");
 
 function safeParseJSON(value, fallback) {
   if (!value) return fallback;
@@ -99,6 +101,15 @@ function registerAgentHandlers(ipcMain) {
     );
 
     const agent = mapAgentRow(await get(`${AGENT_WITH_DEPARTMENT_SQL} WHERE a.id = ?`, [id]));
+
+    // Sem isso, o agente só existia no banco — o AgentManager (memória
+    // RAM que o Orchestrator usa pra achar quem foi @mencionado) só
+    // carrega os agentes UMA VEZ, no boot do app. Um agente criado com
+    // o app já aberto ficava invisível pro chat até reiniciar tudo.
+    await AgentManager.registerAgent(agent).catch((err) => {
+      console.error(`[agentHandlers] Falha ao registrar agente "${agent.name}" em memória:`, err);
+    });
+
     EventBus.emitEvent(EVENT_TYPES.AGENT_CREATED, { agent });
 
     return { success: true, agent };
@@ -149,6 +160,15 @@ function registerAgentHandlers(ipcMain) {
 
     const agent = mapAgentRow(await get(`${AGENT_WITH_DEPARTMENT_SQL} WHERE a.id = ?`, [agentId]));
 
+    // Re-registra a versão atualizada em memória (mesmo raciocínio do
+    // create acima) e derruba a sessão de runtime em cache, pra não
+    // continuar falando com o runtime/config antigo se o usuário trocou
+    // role, personalidade ou o runtime do agente.
+    await AgentManager.registerAgent(agent).catch((err) => {
+      console.error(`[agentHandlers] Falha ao re-registrar agente "${agent.name}" em memória:`, err);
+    });
+    await runtimeSessionManager.endSession(agentId).catch(() => {});
+
     const departmentChanged =
       updates.department !== undefined && updates.department !== current.department_id;
     EventBus.emitEvent(
@@ -176,6 +196,8 @@ function registerAgentHandlers(ipcMain) {
 
   ipcMain.handle("agent:delete", async (_event, agentId) => {
     await run("DELETE FROM agents WHERE id = ?", [agentId]);
+    AgentManager.unregisterAgent(agentId);
+    await runtimeSessionManager.endSession(agentId).catch(() => {});
     EventBus.emitEvent(EVENT_TYPES.AGENT_DELETED, { agentId });
     return { success: true };
   });
