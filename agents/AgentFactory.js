@@ -21,7 +21,7 @@ class Agent {
     // Configurações avançadas
     this.personality = data.personality || {};
     this.skills = data.skills || [];
-    this.isCEO = data.isCEO || false;
+    this.isCEO = data.isCEO ?? data.isCeo ?? false;
     
     // Injeta a dependência de memória (Soul)
     this.memory = new AgentMemory(this.id);
