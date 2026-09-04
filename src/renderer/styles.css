@@ -513,6 +513,7 @@ body {
   padding: 12px 14px;
   border-top: 1px solid var(--border);
   display: flex; gap: 8px;
+  position: relative; /* âncora pro popup de @menção */
 }
 #chat-input {
   flex: 1; background: rgba(255,255,255,0.04);
@@ -521,6 +522,45 @@ body {
   outline: none;
 }
 #chat-input:focus { border-color: rgba(59,130,246,0.5); }
+
+/* ── Mention popup (@agente) ───────────────────────────── */
+.mention-popup {
+  position: absolute;
+  left: 14px; right: 14px;
+  bottom: calc(100% + 8px);
+  max-height: 240px;
+  overflow-y: auto;
+  background: rgba(15, 23, 42, 0.97);
+  backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.45);
+  padding: 6px;
+  z-index: 40;
+  animation: fadeIn 0.12s;
+}
+.mention-popup.hidden { display: none; }
+.mention-empty {
+  padding: 10px 12px; font-size: 12px; color: var(--tx3);
+}
+.mention-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 9px; border-radius: 7px; cursor: pointer;
+}
+.mention-item:hover { background: rgba(255,255,255,0.06); }
+.mention-item.active { background: rgba(59,130,246,0.18); }
+.mention-avatar {
+  width: 26px; height: 26px; border-radius: 50%;
+  flex: none; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: #fff;
+  border: 1.5px solid rgba(255,255,255,0.15);
+}
+.mention-name { font-size: 13px; font-weight: 600; color: var(--tx1); }
+.mention-dept { font-size: 11px; color: var(--tx3); margin-left: auto; padding-left: 10px; white-space: nowrap; }
+.mention-status-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
+  box-shadow: 0 0 5px currentColor;
+}
 
 /* ── Runtimes ─────────────────────────────────────────── */
 .runtimes-list { display: flex; flex-direction: column; gap: 10px; }
