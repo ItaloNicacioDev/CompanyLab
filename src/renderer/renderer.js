@@ -190,9 +190,20 @@ class CompanyLabUI {
   _bindGlobalActions() {
     // Chat
     document.getElementById('btn-send').addEventListener('click', () => this._sendChat());
-    document.getElementById('chat-input').addEventListener('keydown', e => {
+
+    this._mention = { active: false, items: [], activeIndex: 0, start: -1 };
+
+    const chatInput = document.getElementById('chat-input');
+    chatInput.addEventListener('input', () => this._updateMentionPopup());
+    chatInput.addEventListener('keydown', e => {
+      if (this._mention.active && this._handleMentionKeydown(e)) return;
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._sendChat(); }
     });
+    chatInput.addEventListener('blur', () => {
+      // pequeno atraso pra permitir o clique no item do popup antes de fechar
+      setTimeout(() => this._closeMentionPopup(), 150);
+    });
+    document.getElementById('mention-popup').addEventListener('mousedown', (e) => e.preventDefault());
 
     // Agents
     document.getElementById('btn-create-agent').addEventListener('click', () => {
@@ -401,6 +412,134 @@ class CompanyLabUI {
     });
   }
 
+  // ─── @Menção de agentes no chat ──────────────────────────────────────────
+
+  _mentionQueryAt(value, caret) {
+    // Acha o "@algumaCoisa" que termina exatamente no cursor, sem espaço no meio.
+    const uptoCaret = value.slice(0, caret);
+    const at = uptoCaret.lastIndexOf('@');
+    if (at === -1) return null;
+    const between = uptoCaret.slice(at + 1);
+    if (/\s/.test(between)) return null; // já saiu da palavra da menção
+    return { start: at, query: between };
+  }
+
+  _updateMentionPopup() {
+    const input = document.getElementById('chat-input');
+    const match = this._mentionQueryAt(input.value, input.selectionStart);
+    if (!match) { this._closeMentionPopup(); return; }
+
+    const q = match.query.toLowerCase();
+    const items = (this.agents || [])
+      .filter(a => a.name && a.name.toLowerCase().includes(q))
+      .sort((a, b) => {
+        // prioriza quem começa com a query, depois ordem alfabética
+        const aStarts = a.name.toLowerCase().startsWith(q) ? 0 : 1;
+        const bStarts = b.name.toLowerCase().startsWith(q) ? 0 : 1;
+        return aStarts - bStarts || a.name.localeCompare(b.name);
+      })
+      .slice(0, 8);
+
+    this._mention.active = true;
+    this._mention.start = match.start;
+    this._mention.items = items;
+    this._mention.activeIndex = 0;
+    this._renderMentionPopup();
+  }
+
+  _renderMentionPopup() {
+    const popup = document.getElementById('mention-popup');
+    const { items, activeIndex } = this._mention;
+    const statusMeta = (window.CompanyLabWorld2D && window.CompanyLabWorld2D.STATUS_META) || {};
+
+    if (!items.length) {
+      popup.innerHTML = '<div class="mention-empty">Nenhum agente encontrado</div>';
+      popup.classList.remove('hidden');
+      return;
+    }
+
+    popup.innerHTML = items.map((a, i) => {
+      const initials = (a.name || '?').trim().slice(0, 2).toUpperCase();
+      const dotColor = (statusMeta[a.status] && statusMeta[a.status].color) || '#64748b';
+      const avatarBg = this._colorForAgent(a);
+      return (
+        '<div class="mention-item' + (i === activeIndex ? ' active' : '') + '" data-index="' + i + '">' +
+          '<div class="mention-avatar" style="background:' + avatarBg + '">' + initials + '</div>' +
+          '<span class="mention-name">' + a.name + '</span>' +
+          '<span class="mention-status-dot" style="color:' + dotColor + ';background:' + dotColor + '"></span>' +
+          '<span class="mention-dept">' + (a.department || '') + '</span>' +
+        '</div>'
+      );
+    }).join('');
+
+    popup.classList.remove('hidden');
+    popup.querySelectorAll('.mention-item').forEach(el => {
+      el.addEventListener('click', () => this._selectMention(parseInt(el.dataset.index, 10)));
+    });
+  }
+
+  _colorForAgent(agent) {
+    // Usa a cor de destaque do departamento se existir; senão gera uma cor estável a partir do id.
+    const dept = (this.departments || []).find(d => d.id === agent.departmentId);
+    if (dept && dept.accentColor) return dept.accentColor;
+    let hash = 0;
+    const s = String(agent.id || agent.name || '');
+    for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+    return `hsl(${hash % 360}, 65%, 55%)`;
+  }
+
+  _handleMentionKeydown(e) {
+    const { items } = this._mention;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      this._mention.activeIndex = (this._mention.activeIndex + 1) % Math.max(items.length, 1);
+      this._renderMentionPopup();
+      return true;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      this._mention.activeIndex = (this._mention.activeIndex - 1 + items.length) % Math.max(items.length, 1);
+      this._renderMentionPopup();
+      return true;
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      if (!items.length) { this._closeMentionPopup(); return false; }
+      e.preventDefault();
+      this._selectMention(this._mention.activeIndex);
+      return true;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      this._closeMentionPopup();
+      return true;
+    }
+    return false;
+  }
+
+  _selectMention(index) {
+    const agent = this._mention.items[index];
+    if (!agent) return;
+    const input = document.getElementById('chat-input');
+    const caret = input.selectionStart;
+    const before = input.value.slice(0, this._mention.start);
+    const after = input.value.slice(caret);
+    // nomes com espaço quebrariam a detecção de @menção no backend (extractMentions),
+    // então usamos uma versão "colada" do nome, igual Slack/Discord fazem por trás dos panos.
+    const safeName = agent.name.replace(/\s+/g, '');
+    const insertion = '@' + safeName + ' ';
+    input.value = before + insertion + after;
+    const newCaret = before.length + insertion.length;
+    input.setSelectionRange(newCaret, newCaret);
+    input.focus();
+    this._closeMentionPopup();
+  }
+
+  _closeMentionPopup() {
+    this._mention.active = false;
+    this._mention.items = [];
+    document.getElementById('mention-popup').classList.add('hidden');
+  }
+
   // ─── Chat ──────────────────────────────────────────────────────────────────
 
   async _loadChat() {
@@ -420,6 +559,7 @@ class CompanyLabUI {
     const input   = document.getElementById('chat-input');
     const content = input.value.trim();
     if (!content) return;
+    this._closeMentionPopup();
     await ipc('chat:sendMessage', { content });
     input.value = '';
     setTimeout(() => this._loadChat(), 400);
