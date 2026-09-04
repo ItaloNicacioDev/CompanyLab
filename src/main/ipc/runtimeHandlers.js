@@ -11,6 +11,7 @@
 
 const { execFileSync } = require("child_process");
 const defaultConfig = require("../../../config/default.json");
+const { ENHANCED_PATH } = require("../../../backend/runtimes/RuntimeAdapter");
 
 const DETECT_TIMEOUT_MS = 3000;
 
@@ -20,6 +21,10 @@ function detectCli(cliName) {
     const output = execFileSync(cliName, ["--version"], {
       timeout: DETECT_TIMEOUT_MS,
       stdio: ["ignore", "pipe", "ignore"],
+      // Mesmo PATH ampliado usado na hora de rodar de verdade (RuntimeAdapter.js)
+      // — sem isso essa detecção podia dizer "não instalado" enquanto a
+      // detecção real (usada pelo chat) já achava a CLI, uma divergindo da outra.
+      env: { ...process.env, PATH: ENHANCED_PATH },
     });
     return { installed: true, version: output.toString().trim().split("\n")[0] || "desconhecida" };
   } catch (err) {
