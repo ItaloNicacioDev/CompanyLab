@@ -39,7 +39,7 @@ body {
 /* ── Layout ─────────────────────────────────────────── */
 #app { display: flex; height: 100vh; position: relative; }
 
-/* 3D world always fills screen */
+/* 2D world canvas always fills screen */
 #world-canvas {
   position: fixed;
   inset: 0;
@@ -144,14 +144,14 @@ body {
 /* ── Views wrap ──────────────────────────────────────── */
 .views-wrap { flex: 1; overflow: hidden; position: relative; }
 
-/* 3D office: transparent so the canvas shows through */
+/* 2D office: transparent so the canvas shows through */
 .view-office {
   position: absolute; inset: 0;
   display: none;
 }
 .view-office.active { display: block; }
 
-/* HUD toolbar over the 3D canvas */
+/* HUD toolbar over the 2D canvas */
 .office-hud {
   position: absolute; top: 14px; left: 14px;
   display: flex; gap: 8px;
@@ -166,9 +166,9 @@ body {
 .hud-btn:hover { background: rgba(255,255,255,0.06); color: var(--tx1); }
 
 /* ── Overlay "Explorar Escritório" ───────────────────────
-   Cobre o PLANO 3D INTEIRO de propósito (inset:0): o clique já está
+   Cobre o CANVAS 2D INTEIRO de propósito (inset:0): o clique já está
    ligado neste elemento (#world-start) no renderer.js, então cobrir a
-   tela toda é o que faz "clicar em qualquer lugar do 3D" funcionar —
+   tela toda é o que faz "clicar em qualquer lugar do escritório" funcionar —
    antes só o textinho sem estilo (sem tamanho definido) recebia clique. */
 .world-start-overlay {
   position: absolute;
