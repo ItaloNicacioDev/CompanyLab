@@ -12,7 +12,7 @@ const { RuntimeAdapter, buildSystemPromptFromAgentConfig } = require("../Runtime
 const { OpenCodeClient } = require("../../../js/Opencodeclient");
 
 const DEFAULT_PORT = 4096;
-const SERVER_READY_TIMEOUT_MS = 15000;
+const SERVER_READY_TIMEOUT_MS = 25000;
 const SERVER_READY_POLL_INTERVAL_MS = 300;
 
 class OpenCodeAdapter extends RuntimeAdapter {
@@ -37,7 +37,11 @@ class OpenCodeAdapter extends RuntimeAdapter {
     try {
       await this._ensureServerRunning();
       return await this.client.checkHealth();
-    } catch {
+    } catch (err) {
+      // Guarda o motivo real (timeout, ENOENT, porta ocupada, etc.) pra
+      // quem chamou (RuntimeSessionManager) poder mostrar no chat em vez
+      // de um "não disponível" genérico sem pista nenhuma.
+      this.lastError = err.message;
       return false;
     }
   }
@@ -59,8 +63,12 @@ class OpenCodeAdapter extends RuntimeAdapter {
     // binário 'opencode' instalado).
     this._serverReadyPromise = new Promise((resolve, reject) => {
       let settled = false;
+      let stderrBuf = "";
 
       this._serverProcess = this.spawnHidden(this.cliCommand, ["serve", "--port", String(this.port)]);
+      this._serverProcess.stderr?.on("data", (chunk) => {
+        stderrBuf += chunk.toString();
+      });
 
       this._serverProcess.on("exit", (code) => {
         this._log(`[OpenCode] processo 'opencode serve' encerrou (code ${code}).`);
@@ -68,7 +76,8 @@ class OpenCodeAdapter extends RuntimeAdapter {
         if (!settled) {
           settled = true;
           this._serverReadyPromise = null;
-          reject(new Error(`[OpenCode] 'opencode serve' encerrou antes de ficar pronto (code ${code}).`));
+          const detail = stderrBuf.trim() ? ` stderr: ${stderrBuf.trim().slice(-400)}` : "";
+          reject(new Error(`[OpenCode] 'opencode serve' encerrou antes de ficar pronto (code ${code}).${detail}`));
         } else {
           this._serverReadyPromise = null;
         }
