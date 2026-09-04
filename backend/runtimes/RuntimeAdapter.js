@@ -16,6 +16,52 @@
  */
 
 const { spawn } = require("child_process");
+const os = require("os");
+const path = require("path");
+const fs = require("fs");
+
+/**
+ * Apps Electron abertos fora de um terminal (clique no ícone, atalho,
+ * etc.) frequentemente herdam um PATH mais curto que o do shell de
+ * login do usuário — não inclui onde nvm/homebrew/npm -g costumam
+ * colocar CLIs globais. Isso faz `isAvailable()` reportar "não
+ * instalado" mesmo com a CLI funcionando perfeitamente no terminal.
+ * Aqui a gente amplia o PATH com os locais mais comuns antes de tentar
+ * rodar qualquer comando — sem isso, o app nunca teria como confirmar
+ * de verdade se a CLI instalada está pronta pra uso.
+ */
+function buildEnhancedPath() {
+  const home = os.homedir();
+  const candidates = [
+    path.join(home, ".npm-global/bin"),
+    path.join(home, ".local/bin"),
+    path.join(home, "bin"),
+    "/opt/homebrew/bin",
+    "/opt/homebrew/sbin",
+    "/usr/local/bin",
+    "/usr/local/sbin",
+  ];
+
+  // Versões de node instaladas via nvm ficam em ~/.nvm/versions/node/<v>/bin —
+  // adiciona todas (o comando pode ter sido instalado com qualquer uma delas).
+  const nvmDir = path.join(home, ".nvm/versions/node");
+  try {
+    if (fs.existsSync(nvmDir)) {
+      for (const v of fs.readdirSync(nvmDir)) {
+        candidates.push(path.join(nvmDir, v, "bin"));
+      }
+    }
+  } catch {
+    // best-effort — se não der pra listar, segue só com os candidatos fixos
+  }
+
+  const sep = path.delimiter;
+  const current = (process.env.PATH || "").split(sep);
+  const merged = [...new Set([...candidates, ...current])].filter(Boolean);
+  return merged.join(sep);
+}
+
+const ENHANCED_PATH = buildEnhancedPath();
 
 class RuntimeAdapter {
   /** @param {string} name - nome legível, usado em logs/erros (ex: "OpenCode") */
@@ -80,6 +126,7 @@ class RuntimeAdapter {
       windowsHide: true, // <- impede a janela de console de aparecer no Windows
       stdio: ["ignore", "pipe", "pipe"], // stdin ignorado, stdout/stderr CAPTURADOS (nunca herdados)
       ...options,
+      env: { ...process.env, PATH: ENHANCED_PATH, ...(options.env || {}) },
     });
 
     child.stdout?.on("data", (chunk) => this._log(`[${this.name} stdout] ${chunk.toString().trim()}`));
@@ -106,6 +153,7 @@ class RuntimeAdapter {
         windowsHide: true,
         stdio: ["ignore", "pipe", "pipe"],
         ...spawnOptions,
+        env: { ...process.env, PATH: ENHANCED_PATH, ...(spawnOptions.env || {}) },
       });
 
       let stdout = "";
