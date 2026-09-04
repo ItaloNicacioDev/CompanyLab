@@ -64,9 +64,12 @@ function createMainWindow() {
     return { action: "deny" };
   });
 
-  if (process.env.NODE_ENV === "development") {
-    win.webContents.openDevTools();
-  }
+  // if (process.env.NODE_ENV === "development") {
+  //   win.webContents.openDevTools();
+  // }
+  // DEBUG TEMPORÁRIO — força o DevTools abrir mesmo com `npm start`
+  // (sem NODE_ENV=development). Remova essa linha depois de achar o erro.
+  // win.webContents.openDevTools({ mode: "detach" });
 
   return win;
 }
