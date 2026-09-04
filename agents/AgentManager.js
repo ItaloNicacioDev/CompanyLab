@@ -13,6 +13,14 @@ const { run } = require('../backend/database/db');
 const { generateId } = require('../backend/utils/id.js');
 const { extractMentions, DEFAULT_CONVERSATION_ID } = require('../src/main/ipc/chatHandlers');
 
+// Status que só fazem sentido enquanto existe um processo de verdade
+// rodando. Como cada mensagem é uma chamada de CLI isolada (sem
+// processo de vida longa por agente), nada disso pode legitimamente
+// sobreviver a um restart do app — se um agente carrega um desses do
+// banco no boot, é lixo de uma sessão anterior que foi fechada no meio
+// de uma resposta (ou travou), não atividade real acontecendo agora.
+const STALE_STATUSES_ON_BOOT = new Set(['working', 'communicating', 'meeting', 'error']);
+
 class AgentManager {
   constructor() {
     this.agents = new Map();
@@ -24,8 +32,16 @@ class AgentManager {
   async init() {
     try {
       const agentsData = await AgentRepository.getAllAgents();
-      
+
       for (const data of agentsData) {
+        // Limpa estado fantasma de uma sessão anterior interrompida
+        // (ver STALE_STATUSES_ON_BOOT acima) — sem isso, um agente que
+        // estava "working" quando o app foi fechado nascia preso em
+        // erro/working pra sempre, mesmo sem nada de fato rodando.
+        if (STALE_STATUSES_ON_BOOT.has(data.status)) {
+          data.status = 'idle';
+          await AgentRepository.updateAgentStatus(data.id, 'idle').catch(() => {});
+        }
         const agent = await AgentFactory.createAgent(data);
         this.agents.set(agent.id, agent);
       }
