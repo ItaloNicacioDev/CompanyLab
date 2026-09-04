@@ -76,9 +76,10 @@ class RuntimeSessionManager {
 
     const available = await adapter.isAvailable();
     if (!available) {
+      const reason = adapter.lastError ? ` Detalhe: ${adapter.lastError}` : "";
       throw new Error(
         `[RuntimeSessionManager] Runtime "${configKey}" não está disponível agora. ` +
-          `Confira se está instalado/rodando (aba Runtimes do CompanyLab).`
+          `Confira se está instalado/rodando (aba Runtimes do CompanyLab).${reason}`
       );
     }
 
