@@ -35,7 +35,9 @@ const registerDashboardHandlers  = require("./ipc/dashboardHandlers");
 const registerDepartmentHandlers = require("./ipc/departmentHandlers");
 const registerProjectHandlers    = require("./ipc/projectHandlers");
 const registerRuntimeHandlers    = require("./ipc/runtimeHandlers");
+const registerSkillHandlers      = require("./ipc/skillHandlers");
 const registerTaskHandlers       = require("./ipc/taskHandlers");
+const SkillManager               = require("../../backend/skills/SkillManager");
 
 // Garante uma unica instancia do app rodando por vez.
 const gotTheLock = app.requestSingleInstanceLock();
@@ -53,6 +55,10 @@ async function bootstrap() {
   // 1.6. Inicia o Cérebro Orquestrador que liga UI -> Agentes
   Orchestrator.init();
 
+  // 1.7. Garante que a biblioteca pronta de skills existe em skill_packages
+  // (idempotente — só insere o que ainda não existe pelo slug).
+  await SkillManager.seedLibrary();
+
   // 2. Handlers IPC
   registerAgentHandlers(ipcMain);
   registerChatHandlers(ipcMain);
@@ -61,6 +67,7 @@ async function bootstrap() {
   registerDepartmentHandlers(ipcMain);
   registerProjectHandlers(ipcMain);
   registerRuntimeHandlers(ipcMain);
+  registerSkillHandlers(ipcMain);
   registerTaskHandlers(ipcMain);
 
   // 3. Janela principal
