@@ -94,3 +94,7 @@ function registerRuntimeHandlers(ipcMain) {
 }
 
 module.exports = registerRuntimeHandlers;
+// Exportado à parte pra skillHandlers.js poder saber se um CLI (ex:
+// "opencode") está instalado no PATH, sem duplicar a lógica de detecção
+// nem criar acoplamento circular entre os dois módulos de handler.
+module.exports.detectCli = detectCli;
