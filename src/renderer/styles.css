@@ -44,6 +44,15 @@ body {
   position: fixed;
   inset: 0;
   z-index: 0;
+  transition: filter 0.25s ease;
+}
+
+/* Qualquer view que não seja o Office (Dashboard, Agentes, Skills, etc.)
+   borra e escurece o escritório 2D atrás do painel — sem isso ele fica
+   "vivo" e chamando atenção o tempo todo atrás do conteúdo, competindo
+   com o que o usuário realmente veio ver naquela aba. */
+#world-canvas.world-blurred {
+  filter: blur(16px) brightness(0.55) saturate(1.05);
 }
 
 /* ── Sidebar ─────────────────────────────────────────── */
