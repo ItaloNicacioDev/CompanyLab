@@ -15,6 +15,8 @@ class CompanyLabUI {
     this.agents      = [];
     this.departments = [];
     this.tasks       = [];
+    this.skills       = [];
+    this.skillTargets = [];
     this.world       = null;
     this._pollTimer  = null;
     this._currentPanelAgentId   = null;
@@ -152,7 +154,7 @@ class CompanyLabUI {
     const labels = {
       office:'Office', dashboard:'Dashboard', agents:'Agentes',
       departments:'Departamentos', tasks:'Tarefas', chat:'Chat', runtimes:'Runtimes',
-      settings:'Configurações',
+      skills:'Skills', settings:'Configurações',
     };
     document.getElementById('current-view').textContent = labels[name] || name;
 
@@ -170,6 +172,7 @@ class CompanyLabUI {
     if (name === 'tasks')       this._loadTasks();
     if (name === 'chat')        this._loadChat();
     if (name === 'runtimes')    this._loadRuntimes();
+    if (name === 'skills')      this._loadSkills();
     if (name === 'settings')    this._loadSettings();
   }
 
@@ -248,6 +251,26 @@ class CompanyLabUI {
     // com o escritório 2D (sem Pointer Lock — seção 17/33 do spec de migração).
     document.getElementById('world-start').addEventListener('click', () => {
       if (this.world) this.world.requestEnter();
+    });
+
+    // Skills
+    document.getElementById('btn-create-skill')?.addEventListener('click', () => this._openCreateSkillModal());
+    document.getElementById('btn-save-skill')?.addEventListener('click', () => this._saveSkill());
+    document.getElementById('btn-confirm-install-skill')?.addEventListener('click', () => this._confirmInstallSkill());
+
+    // Delegação: os cards de skill são recriados a cada _loadSkills()
+    document.getElementById('view-skills')?.addEventListener('click', (e) => {
+      const installBtn = e.target.closest('[data-install-skill]');
+      if (installBtn) return this._openInstallSkillModal(installBtn.dataset.installSkill);
+
+      const editBtn = e.target.closest('[data-edit-skill]');
+      if (editBtn) return this._openEditSkillModal(editBtn.dataset.editSkill);
+
+      const deleteBtn = e.target.closest('[data-delete-skill]');
+      if (deleteBtn) return this._deleteSkill(deleteBtn.dataset.deleteSkill);
+
+      const uninstallBtn = e.target.closest('[data-uninstall-skill]');
+      if (uninstallBtn) return this._uninstallSkill(uninstallBtn.dataset.uninstallSkill, uninstallBtn.dataset.uninstallRuntime);
     });
   }
 
@@ -628,6 +651,164 @@ class CompanyLabUI {
         '</div>' +
       '</div>'
     ).join('');
+  }
+
+  // ─── Skills (biblioteca pronta + skills próprias, instaláveis em qualquer CLI) ──
+
+  async _loadSkills() {
+    const [skills, targets] = await Promise.all([
+      ipc('skill:listAll'),
+      ipc('skill:listTargets'),
+    ]);
+    this.skills = skills;
+    this.skillTargets = targets;
+
+    const library = skills.filter(s => s.source === 'library');
+    const custom  = skills.filter(s => s.source === 'custom');
+
+    document.getElementById('skills-list-library').innerHTML =
+      library.map(s => this._renderSkillCard(s)).join('') ||
+      '<p class="settings-hint">Nenhuma skill na biblioteca.</p>';
+
+    document.getElementById('skills-list-custom').innerHTML =
+      custom.map(s => this._renderSkillCard(s)).join('') ||
+      '<p class="settings-hint">Você ainda não criou nenhuma skill própria.</p>';
+  }
+
+  _renderSkillCard(skill) {
+    const esc = (s) => this._escapeHtml(s);
+    const installedRuntimes = Object.keys(skill.installedIn || {});
+    const chips = installedRuntimes.map(rt =>
+      '<span class="skill-chip">' + esc(rt) +
+        '<button class="skill-chip-x" data-uninstall-skill="' + skill.id + '" data-uninstall-runtime="' + esc(rt) + '" title="Desinstalar de ' + esc(rt) + '">✕</button>' +
+      '</span>'
+    ).join('');
+
+    const customActions = skill.source === 'custom'
+      ? '<button class="btn-secondary btn-small" data-edit-skill="' + skill.id + '">Editar</button>' +
+        '<button class="btn-secondary btn-small" data-delete-skill="' + skill.id + '">Excluir</button>'
+      : '';
+
+    return (
+      '<div class="skill-card">' +
+        '<div class="skill-card-header">' +
+          '<h4>' + esc(skill.name) + '</h4>' +
+          '<span class="skill-source-badge skill-source-' + skill.source + '">' +
+            (skill.source === 'library' ? 'Biblioteca' : 'Personalizada') +
+          '</span>' +
+        '</div>' +
+        '<p class="skill-description">' + esc(skill.description) + '</p>' +
+        (chips ? '<div class="skill-chips">' + chips + '</div>' : '') +
+        '<div class="skill-card-actions">' +
+          '<button class="btn-primary btn-small" data-install-skill="' + skill.id + '">Instalar</button>' +
+          customActions +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  _openCreateSkillModal() {
+    document.getElementById('modal-create-skill-title').textContent = 'Nova Skill';
+    document.getElementById('skill-edit-id').value = '';
+    const slugInput = document.getElementById('skill-slug');
+    slugInput.value = '';
+    slugInput.disabled = false;
+    document.getElementById('skill-name').value = '';
+    document.getElementById('skill-description').value = '';
+    document.getElementById('skill-content').value = '';
+    this._showModal('modal-create-skill');
+  }
+
+  _openEditSkillModal(id) {
+    const skill = this.skills.find(s => s.id === id);
+    if (!skill) return;
+    document.getElementById('modal-create-skill-title').textContent = 'Editar Skill';
+    document.getElementById('skill-edit-id').value = skill.id;
+    const slugInput = document.getElementById('skill-slug');
+    slugInput.value = skill.slug;
+    // O slug é o nome da pasta/arquivo já instalado em possíveis CLIs —
+    // trocar depois de criada deixaria pastas "órfãs" pra trás.
+    slugInput.disabled = true;
+    document.getElementById('skill-name').value = skill.name;
+    document.getElementById('skill-description').value = skill.description;
+    document.getElementById('skill-content').value = skill.content;
+    this._showModal('modal-create-skill');
+  }
+
+  async _saveSkill() {
+    const id = document.getElementById('skill-edit-id').value;
+    const payload = {
+      name: document.getElementById('skill-name').value.trim(),
+      description: document.getElementById('skill-description').value.trim(),
+      content: document.getElementById('skill-content').value.trim(),
+    };
+
+    const result = id
+      ? await ipc('skill:update', { id, ...payload })
+      : await ipc('skill:create', { slug: document.getElementById('skill-slug').value.trim().toLowerCase(), ...payload });
+
+    if (result.success) {
+      this._hideModal();
+      this._loadSkills();
+    } else {
+      alert(result.error || 'Não foi possível salvar a skill.');
+    }
+  }
+
+  async _deleteSkill(id) {
+    const skill = this.skills.find(s => s.id === id);
+    if (!skill) return;
+    if (!confirm('Excluir a skill "' + skill.name + '"? Isso remove ela de todos os CLIs onde estava instalada.')) return;
+    const result = await ipc('skill:delete', id);
+    if (result.success) this._loadSkills();
+    else alert(result.error || 'Não foi possível excluir a skill.');
+  }
+
+  _openInstallSkillModal(id) {
+    const skill = this.skills.find(s => s.id === id);
+    if (!skill) return;
+    document.getElementById('install-skill-id').value = id;
+
+    const targets = this.skillTargets || [];
+    document.getElementById('install-skill-targets').innerHTML = targets.length
+      ? targets.map(t => {
+          const alreadyInstalled = !!skill.installedIn[t.name];
+          return (
+            '<label class="form-group checkbox">' +
+              '<input type="checkbox" value="' + t.name + '"' + (alreadyInstalled ? ' checked' : '') + ' />' +
+              ' ' + t.name +
+              (t.installed ? '' : ' <span class="skill-target-missing">(CLI não detectada no PATH)</span>') +
+            '</label>'
+          );
+        }).join('')
+      : '<p class="settings-hint">Nenhum CLI com suporte a skills configurado.</p>';
+
+    this._showModal('modal-install-skill');
+  }
+
+  async _confirmInstallSkill() {
+    const skillId = document.getElementById('install-skill-id').value;
+    const checked = Array.from(
+      document.querySelectorAll('#install-skill-targets input[type="checkbox"]:checked')
+    ).map(cb => cb.value);
+
+    this._hideModal();
+    if (!checked.length) return;
+
+    const result = await ipc('skill:install', { skillId, runtimeNames: checked });
+    this._loadSkills();
+    if (!result.success) alert(result.error || 'Falha ao instalar a skill.');
+  }
+
+  async _uninstallSkill(skillId, runtimeName) {
+    await ipc('skill:uninstall', { skillId, runtimeName });
+    this._loadSkills();
+  }
+
+  _escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
   }
 
   // ─── Modals ────────────────────────────────────────────────────────────────
