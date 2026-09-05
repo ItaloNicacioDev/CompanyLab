@@ -163,6 +163,11 @@ class CompanyLabUI {
       document.exitPointerLock();
     }
 
+    // Borra o escritório 2D atrás de qualquer view que não seja o Office,
+    // pra não competir visualmente com o conteúdo do painel (dashboard,
+    // agentes, skills, etc.).
+    document.getElementById('world-canvas')?.classList.toggle('world-blurred', name !== 'office');
+
     // Set world to passive camera when not in office view
     if (this.world) this.world.setPassive(name !== 'office');
 
