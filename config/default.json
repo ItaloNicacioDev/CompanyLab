@@ -13,19 +13,22 @@
       "type": "cli",
       "cli": "opencode",
       "adapter": "OpenCodeAdapter",
-      "installUrl": "https://github.com/opencode-ai/opencode"
+      "installUrl": "https://github.com/opencode-ai/opencode",
+      "skillsGlobalDir": "~/.config/opencode/skills"
     },
     "Codex": {
       "type": "cli",
       "cli": "codex",
       "adapter": "CodexAdapter",
-      "installUrl": "https://github.com/openai/codex"
+      "installUrl": "https://github.com/openai/codex",
+      "skillsGlobalDir": "~/.codex/skills"
     },
     "Claude Code": {
       "type": "cli",
       "cli": "claude",
       "adapter": "ClaudeCodeAdapter",
-      "installUrl": "https://github.com/anthropics/anthropic-cookbook"
+      "installUrl": "https://github.com/anthropics/anthropic-cookbook",
+      "skillsGlobalDir": "~/.claude/skills"
     },
     "Local (Ollama)": {
       "type": "local",
