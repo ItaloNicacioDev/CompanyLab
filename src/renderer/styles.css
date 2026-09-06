@@ -78,6 +78,30 @@
   --tx1: #e6f4f1; --tx2: #5b7a86; --tx3: #9fc6c1;
 }
 
+[data-theme="cyberpunk"] {
+  --bg: #0d0221; --surface: rgba(24,10,45,0.65); --surface-2: #170a30;
+  --border: rgba(255,46,151,0.25);
+  --accent: #00e5ff; --accent-h: #00b8cc; --accent-glow: rgba(0,229,255,0.35); --on-accent: #0d0221;
+  --success: #39ff14; --warning: #f9f002; --danger: #ff2e97;
+  --tx1: #f2f2f2; --tx2: #8c7ba6; --tx3: #c9a4ff;
+}
+
+[data-theme="monokai"] {
+  --bg: #272822; --surface: rgba(56,58,49,0.6); --surface-2: #3e3d32;
+  --border: rgba(166,226,46,0.18);
+  --accent: #66d9ef; --accent-h: #4fc1e0; --accent-glow: rgba(102,217,239,0.25); --on-accent: #272822;
+  --success: #a6e22e; --warning: #e6db74; --danger: #f92672;
+  --tx1: #f8f8f2; --tx2: #75715e; --tx3: #cfcfc2;
+}
+
+[data-theme="gruvbox"] {
+  --bg: #282828; --surface: rgba(60,56,54,0.6); --surface-2: #3c3836;
+  --border: rgba(131,165,152,0.2);
+  --accent: #83a598; --accent-h: #458588; --accent-glow: rgba(131,165,152,0.28); --on-accent: #282828;
+  --success: #b8bb26; --warning: #fabd2f; --danger: #fb4934;
+  --tx1: #ebdbb2; --tx2: #928374; --tx3: #d5c4a1;
+}
+
 /* ── Reset ──────────────────────────────────────────── */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -168,7 +192,7 @@ body {
 .nav-item svg { flex-shrink: 0; opacity: 0.7; }
 .nav-item:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--tx3); }
 .nav-item.active { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--tx1); }
-.nav-item.active svg { opacity: 1; color: var(--accent); }
+.nav-item.active svg { opacity: 1; color: var(--accent); filter: drop-shadow(0 0 4px var(--accent-glow)); }
 .nav-item.active::before {
   content: '';
   position: absolute; left: 0; top: 20%; bottom: 20%;
@@ -401,6 +425,11 @@ body {
   position: absolute; inset: 0;
   overflow-y: auto;
   padding: 22px;
+  /* Sem isso, qualquer view que não seja o Office deixava o canvas 2D
+     (borrado) vazar através dos cards translúcidos — virava uma mancha
+     nebulosa atrás do conteúdo em vez de simplesmente sumir. Com um
+     fundo sólido aqui, a view cobre o canvas por completo. */
+  background: var(--bg);
 }
 .view-panel.active { display: block; }
 
