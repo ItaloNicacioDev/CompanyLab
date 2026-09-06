@@ -1,20 +1,81 @@
-/* ── Variables ─────────────────────────────────────── */
+/* ── Variables (tema "dark" = padrão) ────────────────── */
 :root {
-  --bg:        #0b1120;
-  --surface:   rgba(15, 23, 42, 0.72);
-  --border:    rgba(99, 131, 185, 0.18);
-  --accent:    #3b82f6;
-  --accent-h:  #2563eb;
+  --bg:          #0b1120;
+  --surface:     rgba(15, 23, 42, 0.72);
+  --surface-2:   #0f172a;
+  --border:      rgba(99, 131, 185, 0.18);
+  --accent:      #3b82f6;
+  --accent-h:    #2563eb;
   --accent-glow: rgba(59,130,246,0.25);
-  --success:   #22c55e;
-  --warning:   #f59e0b;
-  --danger:    #ef4444;
+  --on-accent:   #ffffff;
+  --success:     #22c55e;
+  --warning:     #f59e0b;
+  --danger:      #ef4444;
+  /* Derivados — não precisam ser redeclarados por tema, seguem
+     automaticamente --danger/--accent do tema ativo. */
+  --danger-fg:       color-mix(in srgb, var(--danger) 65%, white);
+  --danger-fg-hover: color-mix(in srgb, var(--danger) 50%, white);
   --tx1:       #e2e8f0;
   --tx2:       #64748b;
   --tx3:       #94a3b8;
   --radius:    10px;
   --sidebar-w: 220px;
   --topbar-h:  52px;
+}
+
+/* ── Loja de Temas ────────────────────────────────────
+   Cada tema só precisa sobrescrever os ~14 tokens "crus" acima
+   (bg/surface/surface-2/border/accent/accent-h/accent-glow/on-accent/
+   success/warning/danger/tx1/tx2/tx3) — o resto do arquivo inteiro
+   deriva desses tokens via var()/color-mix(), então já herda o tema
+   automaticamente sem precisar de nenhuma regra extra. */
+
+[data-theme="dark"] {
+  --bg: #0b1120; --surface: rgba(15,23,42,0.72); --surface-2: #0f172a;
+  --border: rgba(99,131,185,0.18);
+  --accent: #3b82f6; --accent-h: #2563eb; --accent-glow: rgba(59,130,246,0.25); --on-accent: #ffffff;
+  --success: #22c55e; --warning: #f59e0b; --danger: #ef4444;
+  --tx1: #e2e8f0; --tx2: #64748b; --tx3: #94a3b8;
+}
+
+[data-theme="light"] {
+  --bg: #f1f5f9; --surface: rgba(255,255,255,0.75); --surface-2: #ffffff;
+  --border: rgba(15,23,42,0.10);
+  --accent: #2563eb; --accent-h: #1d4ed8; --accent-glow: rgba(37,99,235,0.20); --on-accent: #ffffff;
+  --success: #16a34a; --warning: #b45309; --danger: #dc2626;
+  --tx1: #0f172a; --tx2: #64748b; --tx3: #334155;
+}
+
+[data-theme="dracula"] {
+  --bg: #282a36; --surface: rgba(68,71,90,0.55); --surface-2: #343746;
+  --border: rgba(189,147,249,0.18);
+  --accent: #bd93f9; --accent-h: #9d7cd8; --accent-glow: rgba(189,147,249,0.28); --on-accent: #282a36;
+  --success: #50fa7b; --warning: #f1fa8c; --danger: #ff5555;
+  --tx1: #f8f8f2; --tx2: #6272a4; --tx3: #c2c6dd;
+}
+
+[data-theme="nord"] {
+  --bg: #2e3440; --surface: rgba(59,66,82,0.6); --surface-2: #3b4252;
+  --border: rgba(136,192,208,0.18);
+  --accent: #88c0d0; --accent-h: #81a1c1; --accent-glow: rgba(136,192,208,0.25); --on-accent: #2e3440;
+  --success: #a3be8c; --warning: #ebcb8b; --danger: #bf616a;
+  --tx1: #eceff4; --tx2: #4c566a; --tx3: #d8dee9;
+}
+
+[data-theme="solarized"] {
+  --bg: #002b36; --surface: rgba(7,54,66,0.65); --surface-2: #073642;
+  --border: rgba(38,139,210,0.18);
+  --accent: #268bd2; --accent-h: #1d6fa8; --accent-glow: rgba(38,139,210,0.25); --on-accent: #ffffff;
+  --success: #859900; --warning: #b58900; --danger: #dc322f;
+  --tx1: #eee8d5; --tx2: #586e75; --tx3: #93a1a1;
+}
+
+[data-theme="ocean"] {
+  --bg: #0a1929; --surface: rgba(13,31,45,0.7); --surface-2: #0f2436;
+  --border: rgba(45,212,191,0.18);
+  --accent: #2dd4bf; --accent-h: #14b8a6; --accent-glow: rgba(45,212,191,0.28); --on-accent: #04211d;
+  --success: #34d399; --warning: #fbbf24; --danger: #f87171;
+  --tx1: #e6f4f1; --tx2: #5b7a86; --tx3: #9fc6c1;
 }
 
 /* ── Reset ──────────────────────────────────────────── */
@@ -26,6 +87,7 @@ body {
   overflow: hidden;
   height: 100vh;
   font-size: 14px;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 /* ── Glass util ─────────────────────────────────────── */
@@ -39,7 +101,11 @@ body {
 /* ── Layout ─────────────────────────────────────────── */
 #app { display: flex; height: 100vh; position: relative; }
 
-/* 2D world canvas always fills screen */
+/* 2D world canvas always fills screen.
+   NOTA: o desenho do escritório 2D (RoomRenderer/ChibiRenderer/etc.) é
+   feito via <canvas> com cores próprias no JS — os temas aqui embaixo
+   trocam a paleta do CHROME da interface (sidebar, painéis, cards,
+   texto), não o estilo de arte do escritório em si. */
 #world-canvas {
   position: fixed;
   inset: 0;
@@ -81,7 +147,7 @@ body {
   border-radius: 8px;
   background: var(--accent);
   display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 800; color: #fff;
+  font-size: 12px; font-weight: 800; color: var(--on-accent);
   box-shadow: 0 0 12px var(--accent-glow);
 }
 .logo-text { font-weight: 700; font-size: 15px; letter-spacing: -0.3px; }
@@ -100,8 +166,8 @@ body {
   position: relative;
 }
 .nav-item svg { flex-shrink: 0; opacity: 0.7; }
-.nav-item:hover { background: rgba(59,130,246,0.08); color: var(--tx3); }
-.nav-item.active { background: rgba(59,130,246,0.14); color: var(--tx1); }
+.nav-item:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--tx3); }
+.nav-item.active { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--tx1); }
 .nav-item.active svg { opacity: 1; color: var(--accent); }
 .nav-item.active::before {
   content: '';
@@ -114,7 +180,7 @@ body {
 .badge {
   margin-left: auto;
   background: var(--accent);
-  color: #fff; font-size: 10px;
+  color: var(--on-accent); font-size: 10px;
   padding: 1px 6px; border-radius: 20px;
   display: none;
 }
@@ -172,13 +238,15 @@ body {
   padding: 4px 10px; border-radius: 6px;
   transition: background 0.15s;
 }
-.hud-btn:hover { background: rgba(255,255,255,0.06); color: var(--tx1); }
+.hud-btn:hover { background: color-mix(in srgb, var(--tx1) 6%, transparent); color: var(--tx1); }
 
 /* ── Overlay "Explorar Escritório" ───────────────────────
    Cobre o CANVAS 2D INTEIRO de propósito (inset:0): o clique já está
    ligado neste elemento (#world-start) no renderer.js, então cobrir a
    tela toda é o que faz "clicar em qualquer lugar do escritório" funcionar —
-   antes só o textinho sem estilo (sem tamanho definido) recebia clique. */
+   antes só o textinho sem estilo (sem tamanho definido) recebia clique.
+   Cor fixa de propósito (não segue o tema): dimeriza o CANVAS do
+   escritório, que tem arte própria independente do tema da UI. */
 .world-start-overlay {
   position: absolute;
   inset: 0;
@@ -248,7 +316,7 @@ body {
   padding: 2px 7px;
   margin: 0 5px 0 12px;
   border-radius: 5px;
-  background: rgba(148, 163, 184, 0.12);
+  background: color-mix(in srgb, var(--tx3) 12%, transparent);
   border: 1px solid var(--border);
   color: var(--tx1);
   font-size: 11px;
@@ -257,7 +325,7 @@ body {
 }
 .wso-key:first-child { margin-left: 0; }
 
-/* ── Crosshair (modo FPS travado) ────────────────────────── */
+/* ── Crosshair (modo FPS travado — sem uso atualmente, mantido oculto) ── */
 .crosshair {
   position: absolute;
   top: 50%;
@@ -344,22 +412,22 @@ body {
   transition: background 0.15s, box-shadow 0.15s;
 }
 .btn-primary {
-  background: var(--accent); color: #fff;
+  background: var(--accent); color: var(--on-accent);
 }
 .btn-primary:hover {
   background: var(--accent-h);
   box-shadow: 0 0 12px var(--accent-glow);
 }
-.btn-secondary { background: rgba(255,255,255,0.06); color: var(--tx1); }
-.btn-secondary:hover { background: rgba(255,255,255,0.1); }
+.btn-secondary { background: color-mix(in srgb, var(--tx1) 6%, transparent); color: var(--tx1); }
+.btn-secondary:hover { background: color-mix(in srgb, var(--tx1) 10%, transparent); }
 .btn-danger {
-  background: rgba(239,68,68,0.12); color: #fca5a5;
-  border: 1px solid rgba(239,68,68,0.35);
+  background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger-fg);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
   padding: 7px 16px; border-radius: 8px;
   font-size: 13px; font-weight: 500; cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
-.btn-danger:hover { background: rgba(239,68,68,0.22); color: #fecaca; }
+.btn-danger:hover { background: color-mix(in srgb, var(--danger) 22%, transparent); color: var(--danger-fg-hover); }
 .ap-dismiss { width: 100%; margin-top: 14px; }
 
 /* ── Dashboard ───────────────────────────────────────── */
@@ -369,7 +437,7 @@ body {
   gap: 14px; margin-bottom: 20px;
 }
 .stat-card {
-  background: rgba(15,23,42,0.6);
+  background: color-mix(in srgb, var(--surface-2) 60%, transparent);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 18px 20px;
@@ -399,7 +467,7 @@ body {
 .agent-status-item {
   display: flex; align-items: center; justify-content: space-between;
   padding: 9px 12px;
-  background: rgba(255,255,255,0.03); border-radius: 8px;
+  background: color-mix(in srgb, var(--tx1) 3%, transparent); border-radius: 8px;
   font-size: 12px;
 }
 
@@ -429,14 +497,14 @@ body {
 }
 
 .agent-card, .dept-card {
-  background: rgba(15,23,42,0.65);
+  background: color-mix(in srgb, var(--surface-2) 65%, transparent);
   border: 1px solid var(--border);
   border-radius: 12px; padding: 18px;
   cursor: pointer;
   transition: border-color 0.2s, transform 0.2s;
 }
 .agent-card:hover, .dept-card:hover {
-  border-color: rgba(59,130,246,0.45);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   transform: translateY(-2px);
 }
 .agent-card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
@@ -458,10 +526,12 @@ body {
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .agent-card-dismiss:hover {
-  background: rgba(239,68,68,0.14); color: #fca5a5; border-color: rgba(239,68,68,0.4);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger-fg);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
 }
 .tag {
-  background: rgba(255,255,255,0.05);
+  background: color-mix(in srgb, var(--tx1) 5%, transparent);
   border: 1px solid var(--border);
   padding: 2px 8px; border-radius: 20px; font-size: 11px; color: var(--tx3);
 }
@@ -475,11 +545,11 @@ body {
   font-size: 12px; cursor: pointer;
   transition: 0.15s;
 }
-.filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.filter-btn.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 
 .tasks-list { display: flex; flex-direction: column; gap: 8px; }
 .task-item {
-  background: rgba(15,23,42,0.65);
+  background: color-mix(in srgb, var(--surface-2) 65%, transparent);
   border: 1px solid var(--border);
   border-radius: 10px; padding: 14px 18px;
   display: flex; align-items: center; justify-content: space-between;
@@ -513,9 +583,14 @@ body {
   font-size: 13px; line-height: 1.5;
 }
 @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
-.message-user  { align-self: flex-end; background: var(--accent); color: #fff; }
-.message-agent { align-self: flex-start; background: rgba(255,255,255,0.06); }
-.message-error { align-self: flex-start; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.4); color: #fca5a5; }
+.message-user  { align-self: flex-end; background: var(--accent); color: var(--on-accent); }
+.message-agent { align-self: flex-start; background: color-mix(in srgb, var(--tx1) 6%, transparent); }
+.message-error {
+  align-self: flex-start;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  color: var(--danger-fg);
+}
 .message-header { font-size: 11px; font-weight: 600; margin-bottom: 4px; color: var(--tx3); }
 .message-time   { font-size: 10px; opacity: 0.55; margin-top: 4px; }
 .chat-input-row {
@@ -525,12 +600,12 @@ body {
   position: relative; /* âncora pro popup de @menção */
 }
 #chat-input {
-  flex: 1; background: rgba(255,255,255,0.04);
+  flex: 1; background: color-mix(in srgb, var(--tx1) 4%, transparent);
   border: 1px solid var(--border); border-radius: 8px;
   padding: 9px 14px; color: var(--tx1); font-size: 13px;
   outline: none;
 }
-#chat-input:focus { border-color: rgba(59,130,246,0.5); }
+#chat-input:focus { border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
 
 /* ── Mention popup (@agente) ───────────────────────────── */
 .mention-popup {
@@ -539,7 +614,7 @@ body {
   bottom: calc(100% + 8px);
   max-height: 240px;
   overflow-y: auto;
-  background: rgba(15, 23, 42, 0.97);
+  background: color-mix(in srgb, var(--surface-2) 97%, transparent);
   backdrop-filter: blur(18px) saturate(1.4);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -556,13 +631,13 @@ body {
   display: flex; align-items: center; gap: 10px;
   padding: 7px 9px; border-radius: 7px; cursor: pointer;
 }
-.mention-item:hover { background: rgba(255,255,255,0.06); }
-.mention-item.active { background: rgba(59,130,246,0.18); }
+.mention-item:hover { background: color-mix(in srgb, var(--tx1) 6%, transparent); }
+.mention-item.active { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 .mention-avatar {
   width: 26px; height: 26px; border-radius: 50%;
   flex: none; display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 700; color: #fff;
-  border: 1.5px solid rgba(255,255,255,0.15);
+  font-size: 12px; font-weight: 700; color: var(--on-accent);
+  border: 1.5px solid color-mix(in srgb, var(--tx1) 15%, transparent);
 }
 .mention-name { font-size: 13px; font-weight: 600; color: var(--tx1); }
 .mention-dept { font-size: 11px; color: var(--tx3); margin-left: auto; padding-left: 10px; white-space: nowrap; }
@@ -574,7 +649,7 @@ body {
 /* ── Runtimes ─────────────────────────────────────────── */
 .runtimes-list { display: flex; flex-direction: column; gap: 10px; }
 .runtime-card {
-  background: rgba(15,23,42,0.65);
+  background: color-mix(in srgb, var(--surface-2) 65%, transparent);
   border: 1px solid var(--border);
   border-radius: 10px; padding: 16px 20px;
   display: flex; align-items: center; justify-content: space-between;
@@ -618,17 +693,17 @@ body {
 .form-group textarea,
 .form-group select {
   width: 100%; padding: 9px 12px;
-  background: rgba(255,255,255,0.04);
+  background: color-mix(in srgb, var(--tx1) 4%, transparent);
   border: 1px solid var(--border); border-radius: 8px;
   color: var(--tx1); font-size: 13px;
 }
 .form-group input:focus,
 .form-group textarea:focus,
-.form-group select:focus { outline: none; border-color: rgba(59,130,246,0.5); }
+.form-group select:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
 .form-group.checkbox { display: flex; align-items: center; gap: 8px; flex-direction: row; }
 .form-group.checkbox input { width: auto; }
 .form-group textarea { resize: vertical; min-height: 72px; }
-.form-group select option { background: #0f172a; }
+.form-group select option { background: var(--surface-2); color: var(--tx1); }
 
 /* ── Form row (side-by-side fields) ─────────────────── */
 .form-row { display: flex; gap: 12px; }
@@ -637,7 +712,7 @@ body {
 /* ── Avatar builder (personalização do boneco) ──────── */
 .avatar-builder {
   margin-top: 4px; padding: 14px;
-  background: rgba(255,255,255,0.03);
+  background: color-mix(in srgb, var(--tx1) 3%, transparent);
   border: 1px solid var(--border); border-radius: 10px;
 }
 .avatar-builder-header {
@@ -655,21 +730,27 @@ body {
 /* ── Scrollbars ──────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(100,116,139,0.3); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(100,116,139,0.5); }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--tx2) 30%, transparent); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--tx2) 50%, transparent); }
+
 /* ── Configurações (personalização opcional da empresa) ── */
 .settings-panel { max-width: 480px; display: flex; flex-direction: column; gap: 16px; padding: 4px 2px; }
-.settings-hint { font-size: 13px; color: var(--text-dim, #94a3b8); margin: 0 0 4px; }
-.settings-panel input[type="color"] { width: 56px; height: 34px; padding: 2px; border-radius: 8px; background: transparent; border: 1px solid rgba(255,255,255,0.12); cursor: pointer; }
+.settings-hint { font-size: 13px; color: var(--tx3); margin: 0 0 4px; }
+.accent-color-row { display: flex; align-items: center; gap: 10px; }
+.settings-panel input[type="color"] {
+  width: 56px; height: 34px; padding: 2px; border-radius: 8px;
+  background: transparent; border: 1px solid color-mix(in srgb, var(--tx1) 12%, transparent);
+  cursor: pointer;
+}
 .settings-actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
-.settings-saved-msg { font-size: 13px; color: #4ade80; opacity: 0; transition: opacity 0.2s; }
+.settings-saved-msg { font-size: 13px; color: var(--success); opacity: 0; transition: opacity 0.2s; }
 .settings-saved-msg.visible { opacity: 1; }
 
 /* ── Skills (biblioteca pronta + skills próprias) ────── */
 .skills-section { margin-top: 18px; }
 .skills-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
 .skill-card {
-  background: rgba(15,23,42,0.65);
+  background: color-mix(in srgb, var(--surface-2) 65%, transparent);
   border: 1px solid var(--border);
   border-radius: 10px; padding: 14px 18px;
 }
@@ -679,14 +760,14 @@ body {
   font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
   padding: 2px 8px; border-radius: 999px; flex-shrink: 0;
 }
-.skill-source-library  { background: rgba(59,130,246,0.15); color: #60a5fa; }
-.skill-source-custom   { background: rgba(34,197,94,0.15);  color: #4ade80; }
+.skill-source-library  { background: color-mix(in srgb, var(--accent) 15%, transparent);  color: var(--accent); }
+.skill-source-custom   { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
 .skill-description { font-size: 12.5px; color: var(--tx3); margin-top: 6px; line-height: 1.5; }
 .skill-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .skill-chip {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 11px; color: var(--tx1);
-  background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--tx1) 6%, transparent); border: 1px solid var(--border);
   border-radius: 999px; padding: 3px 6px 3px 10px;
 }
 .skill-chip-x {
@@ -697,3 +778,33 @@ body {
 .skill-card-actions { display: flex; gap: 8px; margin-top: 12px; }
 .skill-target-missing { color: var(--tx2); font-size: 11px; }
 .skill-content-textarea { min-height: 180px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; }
+
+/* ── Temas (loja de temas prontos) ────────────────────── */
+.themes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+}
+.theme-card {
+  background: color-mix(in srgb, var(--surface-2) 65%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px;
+  transition: border-color 0.15s;
+}
+.theme-card-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.theme-swatches { display: flex; gap: 6px; margin-bottom: 12px; }
+.theme-swatch {
+  width: 24px; height: 24px; border-radius: 7px;
+  border: 1px solid rgba(0,0,0,0.15);
+  flex-shrink: 0;
+}
+.theme-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.theme-name { font-size: 13px; font-weight: 600; }
+.theme-active-badge {
+  font-size: 10px; font-weight: 600; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  padding: 3px 9px; border-radius: 999px;
+}
