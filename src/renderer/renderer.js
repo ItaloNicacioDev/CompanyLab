@@ -682,6 +682,9 @@ class CompanyLabUI {
     { id: 'nord',      name: 'Nord',            swatches: ['#2e3440', '#3b4252', '#88c0d0', '#eceff4'] },
     { id: 'solarized', name: 'Solarized Dark',  swatches: ['#002b36', '#073642', '#268bd2', '#eee8d5'] },
     { id: 'ocean',     name: 'Ocean',           swatches: ['#0a1929', '#0f2436', '#2dd4bf', '#e6f4f1'] },
+    { id: 'cyberpunk', name: 'Cyberpunk',       swatches: ['#0d0221', '#170a30', '#00e5ff', '#ff2e97'] },
+    { id: 'monokai',   name: 'Monokai',         swatches: ['#272822', '#3e3d32', '#66d9ef', '#a6e22e'] },
+    { id: 'gruvbox',   name: 'Gruvbox Dark',    swatches: ['#282828', '#3c3836', '#83a598', '#fabd2f'] },
   ];
 
   _loadThemes() {
