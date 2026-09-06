@@ -55,6 +55,10 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/></svg>
         Skills
       </button>
+      <button class="nav-item" data-view="themes">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="19" cy="13" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="9.5" cy="18.5" r="2.5"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c1.1 0 2-.9 2-2 0-.53-.21-1-.55-1.36-.33-.36-.54-.83-.54-1.36 0-1.1.9-2 2-2h2.36c2.14 0 3.87-1.73 3.87-3.87C21.14 6.19 17.13 2 12 2z"/></svg>
+        Temas
+      </button>
       <button class="nav-item" data-view="settings">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         Configurações
@@ -227,6 +231,13 @@
         </div>
       </div>
 
+      <!-- ── TEMAS (loja de temas prontos) ── -->
+      <div class="view view-panel" id="view-themes">
+        <div class="view-header"><h2>Temas</h2></div>
+        <p class="settings-hint">Escolha a paleta de cores da interface. A cor de destaque em Configurações, se personalizada, continua valendo por cima do tema.</p>
+        <div class="themes-grid" id="themes-grid"></div>
+      </div>
+
       <!-- ── CONFIGURAÇÕES (personalização opcional da empresa) ── -->
       <div class="view view-panel" id="view-settings">
         <div class="view-header"><h2>Configurações</h2></div>
@@ -250,8 +261,11 @@
             <textarea id="settings-description" rows="3" placeholder="Do que essa empresa cuida?"></textarea>
           </div>
           <div class="form-group">
-            <label>Cor de destaque</label>
-            <input id="settings-accent-color" type="color" value="#3b82f6" />
+            <label>Cor de destaque <span class="settings-hint" style="display:inline">(opcional — sem isso, segue o tema ativo)</span></label>
+            <div class="accent-color-row">
+              <input id="settings-accent-color" type="color" value="#3b82f6" />
+              <button type="button" class="btn-secondary btn-small" id="btn-reset-accent-color">Usar cor do tema</button>
+            </div>
           </div>
 
           <div class="settings-actions">
