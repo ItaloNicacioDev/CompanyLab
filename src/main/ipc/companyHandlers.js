@@ -32,9 +32,13 @@ function mapCompanyRow(row) {
     id: row.id,
     name: row.name,
     description: config.description || "",
-    accentColor: config.accentColor || "#3b82f6",
+    // null = nenhuma cor própria escolhida -> segue o --accent do tema ativo
+    // (ver Temas). Só vira uma string quando o usuário mexe de propósito no
+    // seletor de cor em Configurações.
+    accentColor: config.accentColor || null,
     emoji: config.emoji || "🏢",
     tagline: config.tagline || "",
+    theme: config.theme || "dark",
     createdAt: row.created_at,
   };
 }
@@ -56,9 +60,13 @@ function registerCompanyHandlers(ipcMain) {
     const mergedConfig = {
       ...currentConfig,
       description: updates.description ?? currentConfig.description ?? "",
-      accentColor: updates.accentColor ?? currentConfig.accentColor ?? "#3b82f6",
+      // undefined (campo nem enviado nesse update) -> mantém o que já tinha.
+      // null (enviado explicitamente) -> limpa a customização, volta a
+      // seguir a cor do tema ativo.
+      accentColor: updates.accentColor !== undefined ? updates.accentColor : (currentConfig.accentColor ?? null),
       emoji: updates.emoji ?? currentConfig.emoji ?? "🏢",
       tagline: updates.tagline ?? currentConfig.tagline ?? "",
+      theme: updates.theme ?? currentConfig.theme ?? "dark",
     };
 
     const name = (updates.name ?? current.name ?? "").trim() || current.name;
