@@ -17,6 +17,8 @@ class CompanyLabUI {
     this.tasks       = [];
     this.skills       = [];
     this.skillTargets = [];
+    this.currentTheme = 'dark';
+    this._accentCustomized = false;
     this.world       = null;
     this._pollTimer  = null;
     this._currentPanelAgentId   = null;
@@ -154,7 +156,7 @@ class CompanyLabUI {
     const labels = {
       office:'Office', dashboard:'Dashboard', agents:'Agentes',
       departments:'Departamentos', tasks:'Tarefas', chat:'Chat', runtimes:'Runtimes',
-      skills:'Skills', settings:'Configurações',
+      skills:'Skills', themes:'Temas', settings:'Configurações',
     };
     document.getElementById('current-view').textContent = labels[name] || name;
 
@@ -178,6 +180,7 @@ class CompanyLabUI {
     if (name === 'chat')        this._loadChat();
     if (name === 'runtimes')    this._loadRuntimes();
     if (name === 'skills')      this._loadSkills();
+    if (name === 'themes')      this._loadThemes();
     if (name === 'settings')    this._loadSettings();
   }
 
@@ -276,6 +279,21 @@ class CompanyLabUI {
 
       const uninstallBtn = e.target.closest('[data-uninstall-skill]');
       if (uninstallBtn) return this._uninstallSkill(uninstallBtn.dataset.uninstallSkill, uninstallBtn.dataset.uninstallRuntime);
+    });
+
+    // Temas
+    document.getElementById('view-themes')?.addEventListener('click', (e) => {
+      const applyBtn = e.target.closest('[data-apply-theme]');
+      if (applyBtn) this._applyThemeChoice(applyBtn.dataset.applyTheme);
+    });
+
+    // Cor de destaque (Configurações): só conta como "customizada" (e só é
+    // salva) quando o usuário de fato mexe no seletor — ver _saveSettings.
+    const accentInput = document.getElementById('settings-accent-color');
+    accentInput?.addEventListener('input', () => { this._accentCustomized = true; });
+    document.getElementById('btn-reset-accent-color')?.addEventListener('click', () => {
+      this._accentCustomized = false;
+      accentInput.value = this._currentThemeAccent();
     });
   }
 
@@ -603,7 +621,12 @@ class CompanyLabUI {
     document.getElementById('settings-name').value = company.name || '';
     document.getElementById('settings-tagline').value = company.tagline || '';
     document.getElementById('settings-description').value = company.description || '';
-    document.getElementById('settings-accent-color').value = company.accentColor || '#3b82f6';
+
+    // accentColor null = usuário nunca customizou -> o picker só mostra a
+    // cor do tema ativo pra referência, mas isso NÃO é enviado no save a
+    // menos que o usuário mexa nele de propósito (ver _accentCustomized).
+    this._accentCustomized = !!company.accentColor;
+    document.getElementById('settings-accent-color').value = company.accentColor || this._currentThemeAccent();
   }
 
   async _saveSettings() {
@@ -612,7 +635,8 @@ class CompanyLabUI {
       name: document.getElementById('settings-name').value.trim(),
       tagline: document.getElementById('settings-tagline').value.trim(),
       description: document.getElementById('settings-description').value.trim(),
-      accentColor: document.getElementById('settings-accent-color').value,
+      // null explícito quando não customizado -> não trava a cor do tema.
+      accentColor: this._accentCustomized ? document.getElementById('settings-accent-color').value : null,
     };
 
     const result = await ipc('company:update', updates);
@@ -625,15 +649,67 @@ class CompanyLabUI {
     }
   }
 
-  /** Aplica emoji/nome/cor da empresa na sidebar e no tema — chamado no boot e após salvar. */
+  _currentThemeAccent() {
+    return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#3b82f6';
+  }
+
+  /** Aplica emoji/nome/cor/tema da empresa na sidebar e na UI — chamado no boot e após salvar. */
   _applyCompanyBranding(company) {
     if (!company) return;
     const markEl = document.getElementById('app-logo-mark');
     const textEl = document.getElementById('app-logo-text');
     if (markEl) markEl.textContent = company.emoji || 'CL';
     if (textEl) textEl.textContent = company.name || 'CompanyLab';
+
+    this.currentTheme = company.theme || 'dark';
+    document.documentElement.setAttribute('data-theme', this.currentTheme);
+
+    // Cor de destaque customizada (opcional) sempre por cima do tema; sem
+    // ela, o --accent do tema ativo (data-theme) vale sozinho.
     if (company.accentColor) {
       document.documentElement.style.setProperty('--accent', company.accentColor);
+    } else {
+      document.documentElement.style.removeProperty('--accent');
+    }
+  }
+
+  // ─── Temas (loja de temas prontos) ──────────────────────────────────────────
+
+  static THEMES = [
+    { id: 'dark',      name: 'Dark (padrão)',   swatches: ['#0b1120', '#0f172a', '#3b82f6', '#e2e8f0'] },
+    { id: 'light',     name: 'Claro',           swatches: ['#f1f5f9', '#ffffff', '#2563eb', '#0f172a'] },
+    { id: 'dracula',   name: 'Dracula',         swatches: ['#282a36', '#343746', '#bd93f9', '#f8f8f2'] },
+    { id: 'nord',      name: 'Nord',            swatches: ['#2e3440', '#3b4252', '#88c0d0', '#eceff4'] },
+    { id: 'solarized', name: 'Solarized Dark',  swatches: ['#002b36', '#073642', '#268bd2', '#eee8d5'] },
+    { id: 'ocean',     name: 'Ocean',           swatches: ['#0a1929', '#0f2436', '#2dd4bf', '#e6f4f1'] },
+  ];
+
+  _loadThemes() {
+    this._renderThemesGrid();
+  }
+
+  _renderThemesGrid() {
+    const active = this.currentTheme || 'dark';
+    document.getElementById('themes-grid').innerHTML = Renderer.THEMES.map(t => {
+      const isActive = t.id === active;
+      const swatches = t.swatches.map(c => '<span class="theme-swatch" style="background:' + c + '"></span>').join('');
+      const action = isActive
+        ? '<span class="theme-active-badge">Ativo</span>'
+        : '<button class="btn-secondary btn-small" data-apply-theme="' + t.id + '">Aplicar</button>';
+      return (
+        '<div class="theme-card' + (isActive ? ' theme-card-active' : '') + '">' +
+          '<div class="theme-swatches">' + swatches + '</div>' +
+          '<div class="theme-card-footer"><span class="theme-name">' + t.name + '</span>' + action + '</div>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  async _applyThemeChoice(themeId) {
+    const result = await ipc('company:update', { theme: themeId });
+    if (result?.success) {
+      this._applyCompanyBranding(result.company);
+      this._renderThemesGrid();
     }
   }
 
