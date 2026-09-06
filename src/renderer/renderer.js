@@ -693,7 +693,7 @@ class CompanyLabUI {
 
   _renderThemesGrid() {
     const active = this.currentTheme || 'dark';
-    document.getElementById('themes-grid').innerHTML = Renderer.THEMES.map(t => {
+    document.getElementById('themes-grid').innerHTML = CompanyLabUI.THEMES.map(t => {
       const isActive = t.id === active;
       const swatches = t.swatches.map(c => '<span class="theme-swatch" style="background:' + c + '"></span>').join('');
       const action = isActive
