@@ -1,0 +1,86 @@
+name: Release CompanyLab
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+          - os: macos-latest
+            platform: mac
+          - os: ubuntu-latest
+            platform: linux
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild native dependencies
+        run: npx electron-rebuild -f -w better-sqlite3
+
+      - name: Build application
+        run: npx electron-builder --${{ matrix.platform }} --publish never
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CompanyLab-${{ matrix.platform }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.deb
+          if-no-files-found: error
+
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Windows
+        uses: actions/download-artifact@v4
+        with:
+          name: CompanyLab-win
+          path: release
+
+      - name: Download macOS
+        uses: actions/download-artifact@v4
+        with:
+          name: CompanyLab-mac
+          path: release
+
+      - name: Download Linux
+        uses: actions/download-artifact@v4
+        with:
+          name: CompanyLab-linux
+          path: release
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
