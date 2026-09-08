@@ -42,8 +42,8 @@
     }
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "electron-store": "^8.1.0",
-    "sqlite3": "^5.1.6",
     "three": "^0.128.0"
   },
   "devDependencies": {
