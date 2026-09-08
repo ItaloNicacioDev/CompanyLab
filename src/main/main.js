@@ -46,20 +46,26 @@ if (!gotTheLock) {
 }
 
 async function bootstrap() {
-  // 1. Banco de dados
+  console.log("[1] bootstrap iniciou");
+
+  console.log("[2] iniciando database...");
   await initDatabase();
+  console.log("[3] database OK");
 
-  // 1.5. Inicia o Manager de Agentes na Memória RAM
+  console.log("[4] iniciando AgentManager...");
   await AgentManager.init();
-  
-  // 1.6. Inicia o Cérebro Orquestrador que liga UI -> Agentes
+  console.log("[5] AgentManager OK");
+
+  console.log("[6] iniciando Orchestrator...");
   Orchestrator.init();
+  console.log("[7] Orchestrator OK");
 
-  // 1.7. Garante que a biblioteca pronta de skills existe em skill_packages
-  // (idempotente — só insere o que ainda não existe pelo slug).
+  console.log("[8] iniciando SkillManager...");
   await SkillManager.seedLibrary();
+  console.log("[9] SkillManager OK");
 
-  // 2. Handlers IPC
+  console.log("[10] registrando IPC...");
+
   registerAgentHandlers(ipcMain);
   registerChatHandlers(ipcMain);
   registerCompanyHandlers(ipcMain);
@@ -70,12 +76,13 @@ async function bootstrap() {
   registerSkillHandlers(ipcMain);
   registerTaskHandlers(ipcMain);
 
-  // 3. Janela principal
+  console.log("[11] IPC OK");
+  console.log("[12] criando janela...");
+
   mainWindow = createMainWindow();
 
-  // Repassa TODO evento real da empresa pro renderer (seção 34 do spec)
-  // — é isso que faz o SceneManager (3D) e o dashboard reagirem sem o
-  // main process precisar saber nada sobre Three.js ou DOM.
+  console.log("[13] JANELA CRIADA");
+
   EventBus.onAnyEvent((event) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("event", event);
