@@ -6,8 +6,12 @@
  * Responsabilidades:
  *  1. Abrir/criar o arquivo .db no lugar certo (pasta de dados do usuário
  *     quando empacotado como app instalado; ./data quando rodando em dev).
- *  2. Expor run/get/all em Promises (o driver `sqlite3` é 100% baseado
- *     em callback — ninguém deveria escrever callback aninhado em 2026).
+ *  2. Expor run/get/all em Promises. Motor: `better-sqlite3`, que é
+ *     síncrono por natureza — aqui embrulhamos cada chamada numa Promise
+ *     resolvida/rejeitada na hora, só pra manter a MESMA assinatura
+ *     assíncrona que o resto do backend (repositories, IPC handlers)
+ *     já espera. Ninguém fora deste arquivo precisa saber que o driver
+ *     trocou.
  *  3. Rodar as migrations em database/migrations/*.sql automaticamente
  *     no boot, uma única vez cada, registrando o que já rodou numa
  *     tabela schema_migrations.
@@ -16,11 +20,20 @@
  * importar ESTE arquivo em vez de abrir sua própria conexão sqlite3.
  * Múltiplas conexões concorrentes no mesmo arquivo SQLite é a receita
  * clássica pra "database is locked".
+ *
+ * Nota de migração (sqlite3 -> better-sqlite3):
+ * O driver antigo (`sqlite3`) foi trocado por `better-sqlite3` porque
+ * o primeiro não publica binários pré-compilados em dia com versões
+ * recentes de Node/Electron, obrigando a compilar na máquina do usuário
+ * (exige Visual Studio Build Tools no Windows). `better-sqlite3` tem
+ * prebuilds mais atualizados e é mais rápido por ser síncrono. A API
+ * pública exportada aqui (run/get/all/execScript/initDatabase/getDb/
+ * closeDatabase/resolveDbPath) NÃO mudou — só o que acontece por dentro.
  */
 
 const path = require("path");
 const fs = require("fs");
-const sqlite3 = require("sqlite3").verbose();
+const Database = require("better-sqlite3");
 const EventBus = require("../../core/events/EventBus");
 const { EVENT_TYPES } = require("../../core/events/eventTypes");
 
@@ -65,59 +78,71 @@ function openConnection() {
   }
 
   return new Promise((resolve, reject) => {
-    const db = new sqlite3.Database(dbPath, (err) => {
-      if (err) {
-        return reject(
-          new Error(`[db.js] Falha ao abrir o banco em ${dbPath}: ${err.message}`)
-        );
-      }
-      db.run("PRAGMA foreign_keys = ON", (pragmaErr) => {
-        if (pragmaErr) return reject(pragmaErr);
-        console.log(`[db.js] Banco de dados aberto em: ${dbPath}`);
-        resolve(db);
-      });
-    });
+    try {
+      const db = new Database(dbPath);
+      db.pragma("foreign_keys = ON");
+      console.log(`[db.js] Banco de dados aberto em: ${dbPath}`);
+      resolve(db);
+    } catch (err) {
+      reject(
+        new Error(`[db.js] Falha ao abrir o banco em ${dbPath}: ${err.message}`)
+      );
+    }
   });
 }
 
-/** Promisifica db.run (INSERT/UPDATE/DELETE/DDL). */
+/**
+ * Promisifica um INSERT/UPDATE/DELETE/DDL.
+ * Mantém o formato antigo `{ lastID, changes }` (o driver antigo usava
+ * `lastID`; better-sqlite3 chama isso de `lastInsertRowid` — traduzimos
+ * aqui pra ninguém que já lê `result.lastID` por aí precisar mudar).
+ */
 function run(sql, params = []) {
   return new Promise((resolve, reject) => {
-    dbInstance.run(sql, params, function onRun(err) {
-      if (err) return reject(err);
-      // `this` aqui é o Statement do sqlite3 — não dá pra usar arrow function.
-      resolve({ lastID: this.lastID, changes: this.changes });
-    });
+    try {
+      const info = dbInstance.prepare(sql).run(params);
+      resolve({ lastID: info.lastInsertRowid, changes: info.changes });
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
-/** Promisifica db.get (uma linha). */
+/** Promisifica uma consulta de uma linha só. */
 function get(sql, params = []) {
   return new Promise((resolve, reject) => {
-    dbInstance.get(sql, params, (err, row) => {
-      if (err) return reject(err);
+    try {
+      const row = dbInstance.prepare(sql).get(params);
+      // sqlite3 antigo resolvia `undefined` quando não achava linha;
+      // better-sqlite3 já faz o mesmo, então o contrato se mantém.
       resolve(row);
-    });
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
-/** Promisifica db.all (várias linhas). */
+/** Promisifica uma consulta de várias linhas. */
 function all(sql, params = []) {
   return new Promise((resolve, reject) => {
-    dbInstance.all(sql, params, (err, rows) => {
-      if (err) return reject(err);
+    try {
+      const rows = dbInstance.prepare(sql).all(params);
       resolve(rows);
-    });
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
-/** Roda uma sequência de statements SQL dentro de uma transação. */
+/** Roda uma sequência de statements SQL (usado pelas migrations). */
 function execScript(sql) {
   return new Promise((resolve, reject) => {
-    dbInstance.exec(sql, (err) => {
-      if (err) return reject(err);
+    try {
+      dbInstance.exec(sql);
       resolve();
-    });
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
@@ -200,12 +225,14 @@ function getDb() {
 function closeDatabase() {
   return new Promise((resolve, reject) => {
     if (!dbInstance) return resolve();
-    dbInstance.close((err) => {
-      if (err) return reject(err);
+    try {
+      dbInstance.close();
       dbInstance = null;
       readyPromise = null;
       resolve();
-    });
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
